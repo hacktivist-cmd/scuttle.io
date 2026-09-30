@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Mail, Lock, User, Loader2, ArrowLeft, Check } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { triggerWelcomeEmail } from '../lib/emailApi'
 
 export default function SignUp() {
   const { signUp, signInWithGoogle } = useAuth()
@@ -23,6 +24,10 @@ export default function SignUp() {
     setLoading(true)
     try {
       await signUp(email, password, name)
+
+      // Fire welcome email (fire-and-forget, not awaited)
+      triggerWelcomeEmail(email, name).catch(() => {})
+
       navigate('/', { replace: true })
     } catch (err) {
       setError(err.message.replace('Firebase: ', ''))
@@ -35,7 +40,12 @@ export default function SignUp() {
     setError('')
     setLoading(true)
     try {
-      await signInWithGoogle()
+      const result = await signInWithGoogle()
+      const googleName = result?.user?.displayName || ''
+      const googleEmail = result?.user?.email || ''
+      if (googleEmail) {
+        triggerWelcomeEmail(googleEmail, googleName).catch(() => {})
+      }
       navigate('/', { replace: true })
     } catch (err) {
       setError(err.message.replace('Firebase: ', ''))

@@ -40,27 +40,28 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 celery_app = Celery("scuttle_tasks", broker=REDIS_URL, backend=REDIS_URL)
-,
-}
 celery_app.conf.timezone = "Africa/Lagos"
 
 # ==================== Beat Schedule ====================
+# ==================== Beat Schedule ====================
 celery_app.conf.beat_schedule = {
-    "send-daily-digests": {
-        "task": "main.send_daily_digests",
-        "schedule": crontab(hour=8, minute=0),  # 8 AM Lagos time, daily
-    },
-    "send-weekly-digests": {
-        "task": "main.send_weekly_digests",
-        "schedule": crontab(hour=8, minute=0, day_of_week="mon"),  # Monday 8 AM
+    "scrape-all-institutions-and-jamb-dynamic": {
+        "task": "main.run_all_scrapers_and_jamb",
+        "schedule": 43200.0,
     },
     "cleanup-old-announcements-daily": {
         "task": "main.cleanup_old_announcements",
-        "schedule": crontab(hour=2, minute=0),  # 2 AM daily
+        "schedule": crontab(hour=2, minute=0),
+    },
+    "send-daily-digests": {
+        "task": "main.send_daily_digests",
+        "schedule": crontab(hour=8, minute=0),
+    },
+    "send-weekly-digests": {
+        "task": "main.send_weekly_digests",
+        "schedule": crontab(hour=8, minute=0, day_of_week="mon"),
     },
 }
-
-
 
 class UniversityModel(Base):
     __tablename__ = "universities"
@@ -382,6 +383,28 @@ def send_weekly_digests_task():
     return send_weekly_digests()
 
 
+
+
+# ==================== Email Celery Tasks ====================
+
+@celery_app.task(name="main.send_welcome_async")
+def send_welcome_async(email: str, name: str = ""):
+    from app.services.email_service import send_welcome_email
+    send_welcome_email(email, name)
+
+
+@celery_app.task(name="main.send_subscription_async")
+def send_subscription_async(email: str, name: str = "", frequency: str = "instant"):
+    from app.services.email_service import send_subscription_confirmation
+    send_subscription_confirmation(email, name, frequency)
+
+
+@celery_app.task(name="main.send_newsletter_async")
+def send_newsletter_async(recipients: list, subject: str, message: str):
+    from app.services.email_service import send_bulk
+    return send_bulk(recipients, subject, message)
+
+
 app = FastAPI(
     title="Scuttle.io Engine",
     version="4.0.0",
@@ -469,6 +492,47 @@ class _NewsletterPayload(_BaseModel):
     subject: str
     message: str
     recipients: _List[_NewsletterRecipient]
+
+
+
+
+# ==================== Welcome & Subscription Endpoints ====================
+
+class _WelcomePayload(BaseModel):
+    email: str
+    name: str = ""
+
+
+class _SubscriptionPayload(BaseModel):
+    email: str
+    name: str = ""
+    frequency: str = "instant"
+
+
+@app.post("/api/v1/send-welcome", tags=["Emails"])
+def send_welcome(payload: _WelcomePayload):
+    """Fire a welcome email after registration (async via Celery)."""
+    try:
+        send_welcome_async.delay(payload.email, payload.name)
+        return {"status": "queued", "to": payload.email}
+    except Exception as e:
+        logger.warning(f"Celery unavailable, sending sync: {e}")
+        from app.services.email_service import send_welcome_email
+        ok = send_welcome_email(payload.email, payload.name)
+        return {"status": "sent" if ok else "failed", "to": payload.email}
+
+
+@app.post("/api/v1/send-subscription", tags=["Emails"])
+def send_subscription(payload: _SubscriptionPayload):
+    """Fire a subscription confirmation email (async via Celery)."""
+    try:
+        send_subscription_async.delay(payload.email, payload.name, payload.frequency)
+        return {"status": "queued", "to": payload.email}
+    except Exception as e:
+        logger.warning(f"Celery unavailable, sending sync: {e}")
+        from app.services.email_service import send_subscription_confirmation
+        ok = send_subscription_confirmation(payload.email, payload.name, payload.frequency)
+        return {"status": "sent" if ok else "failed", "to": payload.email}
 
 
 @app.post("/api/v1/send-newsletter", tags=["Newsletter"])

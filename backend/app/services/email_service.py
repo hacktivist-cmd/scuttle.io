@@ -365,3 +365,119 @@ def send_bulk(recipients: List[Dict], subject: str, message: str) -> Dict:
             failed += 1
         sleep(0.6)
     return {"sent": ok, "failed": failed, "total": len(recipients)}
+
+
+# ══════════════════════════════════════════════════════════
+#  TEMPLATE 4 — WELCOME EMAIL
+# ══════════════════════════════════════════════════════════
+
+def _render_welcome(recipient_name: str) -> str:
+    name = recipient_name or "there"
+
+    inner = f"""
+    <tr>
+      <td style="padding:0 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#FFFFFF;border-radius:24px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+          <tr>
+            <td style="padding:48px 36px 24px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <div style="display:inline-block;padding:10px 20px;border-radius:9999px;background:#EFF6FF;color:#0071E3;font-size:12px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:20px;">Welcome aboard</div>
+              <h1 style="margin:0 0 16px;font-size:30px;font-weight:600;color:#1D1D1F;letter-spacing:-0.6px;line-height:1.25;">Welcome to Scuttle.io, {name}!</h1>
+              <p style="margin:0 0 8px;font-size:17px;line-height:1.7;color:#6B7280;">You're now part of a network of Nigerian students who never miss an admission update.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#F9FAFB;border-radius:16px;margin:16px 0 24px;">
+                <tr>
+                  <td style="padding:24px;">
+                    <p style="margin:0 0 16px;font-size:14px;font-weight:600;color:#1D1D1F;text-transform:uppercase;letter-spacing:0.4px;">Here's what you can do:</p>
+                    <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%">
+                      <tr><td style="padding:6px 0;font-size:15px;line-height:1.6;color:#1D1D1F;">✅ <strong>Follow universities</strong> you care about</td></tr>
+                      <tr><td style="padding:6px 0;font-size:15px;line-height:1.6;color:#1D1D1F;">✅ <strong>Pick your interests</strong> (Post-UTME, Admission Lists, School Fees, JAMB CAPS)</td></tr>
+                      <tr><td style="padding:6px 0;font-size:15px;line-height:1.6;color:#1D1D1F;">✅ <strong>Get personalized alerts</strong> the moment something matters</td></tr>
+                      <tr><td style="padding:6px 0;font-size:15px;line-height:1.6;color:#1D1D1F;">✅ <strong>Choose how often</strong> we email you (instant, daily, weekly)</td></tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td style="background:#0071E3;border-radius:12px;">
+                    <a href="{SITE_URL}/profile" style="display:inline-block;padding:16px 32px;font-size:16px;font-weight:500;color:#FFFFFF;text-decoration:none;">Set Your Preferences →</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:24px 0 0;font-size:14px;line-height:1.7;color:#6B7280;text-align:center;">You can change your preferences anytime from your profile.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    """
+
+    return _wrap(inner, preheader=f"Welcome to Scuttle.io, {name} — set up your preferences")
+
+
+# ══════════════════════════════════════════════════════════
+#  TEMPLATE 5 — SUBSCRIPTION CONFIRMATION
+# ══════════════════════════════════════════════════════════
+
+def _render_subscription(recipient_name: str, frequency: str = "instant") -> str:
+    name = recipient_name or "there"
+    freq_labels = {
+        "instant": "as soon as new updates match your interests",
+        "daily": "once a day with a summary of matched updates",
+        "weekly": "every Monday with a weekly roundup",
+    }
+    freq_text = freq_labels.get(frequency, "as soon as new updates match your interests")
+
+    inner = f"""
+    <tr>
+      <td style="padding:0 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#FFFFFF;border-radius:24px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+          <tr>
+            <td style="padding:48px 36px 32px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <div style="display:inline-block;width:64px;height:64px;border-radius:20px;background:#F0FDF4;font-size:32px;line-height:64px;margin-bottom:24px;">✅</div>
+              <h1 style="margin:0 0 16px;font-size:26px;font-weight:600;color:#1D1D1F;letter-spacing:-0.5px;line-height:1.3;">You're subscribed, {name}!</h1>
+              <p style="margin:0 0 8px;font-size:16px;line-height:1.7;color:#6B7280;">We'll send you updates <strong>{freq_text}</strong>.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#EFF6FF;border:1px solid #DBEAFE;border-radius:16px;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#0071E3;text-transform:uppercase;letter-spacing:0.4px;">📬 What to expect</p>
+                    <p style="margin:0;font-size:15px;line-height:1.7;color:#1D1D1F;">Only updates matching <strong>your interests</strong> and <strong>followed universities</strong> will reach your inbox. No spam, ever.</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:24px 0 0;font-size:14px;line-height:1.7;color:#6B7280;text-align:center;">You can change your frequency or unsubscribe anytime from your <a href="{SITE_URL}/profile" style="color:#0071E3;">profile</a>.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    """
+
+    return _wrap(inner, preheader=f"You're subscribed! We'll send updates {freq_text}")
+
+
+# ══════════════════════════════════════════════════════════
+#  SENDERS FOR NEW TEMPLATES
+# ══════════════════════════════════════════════════════════
+
+def send_welcome_email(to_email: str, recipient_name: str = "") -> bool:
+    """Send the welcome email right after signup."""
+    subject = "Welcome to Scuttle.io 🚀"
+    html = _render_welcome(recipient_name)
+    return _send_html(to_email, subject, html, list_unsubscribe=False)
+
+
+def send_subscription_confirmation(
+    to_email: str, recipient_name: str = "", frequency: str = "instant"
+) -> bool:
+    """Send a confirmation email right after subscribing to the newsletter."""
+    subject = "You're subscribed to Scuttle.io updates ✅"
+    html = _render_subscription(recipient_name, frequency)
+    return _send_html(to_email, subject, html, list_unsubscribe=True)

@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { universitiesData } from '../data/universities'
 import { EMAIL_FREQUENCIES } from '../lib/emailPreferences'
+import { triggerSubscriptionEmail } from '../lib/emailApi'
 import UniversityLogo from '../components/UniversityLogo'
 
 const CATEGORIES = [
@@ -67,12 +68,23 @@ export default function Profile() {
 
   const handleSave = async () => {
     setSaving(true)
+    const wasEnabled = profile?.newsletterEnabled
+    const previousFrequency = profile?.emailFrequency || 'instant'
+
     await updateUserProfile({
       interests,
       followedUniversities,
       newsletterEnabled,
       emailFrequency,
     })
+
+    // Send confirmation email if user just enabled newsletter OR changed frequency
+    const justEnabled = !wasEnabled && newsletterEnabled
+    const frequencyChanged = wasEnabled && newsletterEnabled && previousFrequency !== emailFrequency
+    if ((justEnabled || frequencyChanged) && user?.email) {
+      triggerSubscriptionEmail(user.email, profile?.name || '', emailFrequency).catch(() => {})
+    }
+
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
