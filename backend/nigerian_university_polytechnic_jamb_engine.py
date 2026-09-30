@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
 from celery import Celery
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -39,13 +40,26 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 celery_app = Celery("scuttle_tasks", broker=REDIS_URL, backend=REDIS_URL)
-celery_app.conf.beat_schedule = {
-    "scrape-all-institutions-and-jamb-every-6-hours": {
-        "task": "main.run_all_scrapers_and_jamb",
-        "schedule": 21600.0,
-    },
+,
 }
 celery_app.conf.timezone = "Africa/Lagos"
+
+# ==================== Beat Schedule ====================
+celery_app.conf.beat_schedule = {
+    "send-daily-digests": {
+        "task": "main.send_daily_digests",
+        "schedule": crontab(hour=8, minute=0),  # 8 AM Lagos time, daily
+    },
+    "send-weekly-digests": {
+        "task": "main.send_weekly_digests",
+        "schedule": crontab(hour=8, minute=0, day_of_week="mon"),  # Monday 8 AM
+    },
+    "cleanup-old-announcements-daily": {
+        "task": "main.cleanup_old_announcements",
+        "schedule": crontab(hour=2, minute=0),  # 2 AM daily
+    },
+}
+
 
 
 class UniversityModel(Base):
@@ -73,6 +87,8 @@ class AnnouncementModel(Base):
     pdf_extracted_text = Column(Text, nullable=True)
     date_published = Column(DateTime, nullable=True, index=True)
     date_scraped = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    priority = Column(String(20), default="normal", nullable=False, index=True)
+    image_url = Column(Text, nullable=True)
     university = relationship("UniversityModel", back_populates="announcements")
 
 
@@ -169,6 +185,66 @@ def parse_pdf_attachment(pdf_url: str) -> Optional[str]:
         return None
 
 
+
+
+# ==================== Image Extraction ====================
+
+def extract_image_from_page(url: str) -> str:
+    """Fetch a page and extract the best hero image (og:image preferred)."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ScuttleBot/2.0"
+        }
+        r = requests.get(url, headers=headers, timeout=8)
+        if r.status_code != 200:
+            return ""
+
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        # 1. Try og:image
+        og = soup.find("meta", property="og:image")
+        if og and og.get("content"):
+            return og["content"]
+
+        # 2. Try twitter:image
+        tw = soup.find("meta", attrs={"name": "twitter:image"})
+        if tw and tw.get("content"):
+            return tw["content"]
+
+        # 3. Try first large image in article/main
+        for container in ["article", "main", ".entry-content", ".post-content", ".content"]:
+            node = soup.select_one(container)
+            if node:
+                img = node.find("img")
+                if img and img.get("src"):
+                    src = img["src"]
+                    if src.startswith("//"):
+                        src = "https:" + src
+                    elif src.startswith("/"):
+                        from urllib.parse import urlparse
+                        parsed = urlparse(url)
+                        src = f"{parsed.scheme}://{parsed.netloc}{src}"
+                    if src.startswith("http"):
+                        return src
+
+        return ""
+    except Exception as e:
+        logger.debug(f"Image extraction failed for {url}: {e}")
+        return ""
+
+
+
+
+def determine_priority(category: str) -> str:
+    """High priority categories float to the top of the UI."""
+    high = {"Post-UTME", "Admission List", "JAMB CAPS", "School Fees"}
+    medium = {"JAMB Registration", "Academic Calendar"}
+    if category in high:
+        return "high"
+    if category in medium:
+        return "medium"
+    return "normal"
+
 def submit_scraped_item_to_backend(university_id, title, source_url, summary=None, attachment_url=None):
     category = classify_announcement_category(title)
     slug_hash = hashlib.sha256(f"{university_id}-{title.strip().lower()}".encode()).hexdigest()
@@ -187,11 +263,15 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
             has_att = True
             pdf_text = parse_pdf_attachment(attachment_url)
 
+        # Extract hero image (only for new items)
+        image_url = extract_image_from_page(source_url) if source_url else ""
+
         new_ann = AnnouncementModel(
             university_id=university_id,
             category=category,
             title=title,
             slug_hash=slug_hash,
+            image_url=image_url,
             summary=summary,
             source_url=source_url,
             has_attachment=has_att,
@@ -217,6 +297,9 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
                 "source_url": source_url,
                 "pdf_extracted_text": pdf_text,
                 "date_scraped": new_ann.date_scraped.isoformat() if new_ann.date_scraped else datetime.utcnow().isoformat(),
+                "priority": priority,
+                "university_code": uni.short_code,
+                "image_url": image_url,
             })
         except Exception as fb_err:
             logger.warning(f"Firebase sync skipped: {fb_err}")
@@ -281,6 +364,22 @@ def run_all_scrapers_and_jamb():
         logger.error(f"Scrape task error: {e}")
     finally:
         db.close()
+
+
+
+
+# ==================== Digest Tasks ====================
+
+@celery_app.task(name="main.send_daily_digests")
+def send_daily_digests_task():
+    from app.services.digest_service import send_daily_digests
+    return send_daily_digests()
+
+
+@celery_app.task(name="main.send_weekly_digests")
+def send_weekly_digests_task():
+    from app.services.digest_service import send_weekly_digests
+    return send_weekly_digests()
 
 
 app = FastAPI(

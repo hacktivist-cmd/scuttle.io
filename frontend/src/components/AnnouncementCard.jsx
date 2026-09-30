@@ -2,6 +2,8 @@ import { Eye, ChevronRight, Lock } from 'lucide-react'
 import { useReadTracking } from '../hooks/useReadTracking'
 import { useAuth } from '../contexts/AuthContext'
 import ForYouBadge from './ForYouBadge'
+import UniversityLogo from './UniversityLogo'
+import { matchUniversity } from '../lib/matchUniversity'
 
 export default function AnnouncementCard({ item, index, onClick, forYouReasons = [] }) {
   const { isRead } = useReadTracking()
@@ -9,6 +11,12 @@ export default function AnnouncementCard({ item, index, onClick, forYouReasons =
   const read = isRead(item.id)
   const locked = !user
   const hasBadge = user && forYouReasons.length > 0
+
+  const university =
+    matchUniversity(item) || {
+      name: item.university_name,
+      code: item.university_code || 'UNI',
+    }
 
   return (
     <div
@@ -54,13 +62,16 @@ export default function AnnouncementCard({ item, index, onClick, forYouReasons =
         </p>
       </div>
 
-      <div className="mt-8 pt-5 border-t border-gray-100 flex items-center justify-between relative">
-        <span className="text-xs text-apple-gray font-medium truncate max-w-[130px]">
-          {item.university_name}
-        </span>
+      <div className="mt-8 pt-5 border-t border-gray-100 flex items-center justify-between relative gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <UniversityLogo university={university} size={32} />
+          <span className="text-xs text-apple-gray font-medium truncate">
+            {item.university_name}
+          </span>
+        </div>
         <button
           onClick={onClick}
-          className="bg-apple-bg group-hover:bg-apple-blue group-hover:text-white text-apple-dark font-medium px-5 py-2 rounded-full text-xs transition-all duration-300 flex items-center gap-1.5 hover:scale-[1.03]"
+          className="flex-shrink-0 bg-apple-bg group-hover:bg-apple-blue group-hover:text-white text-apple-dark font-medium px-5 py-2 rounded-full text-xs transition-all duration-300 flex items-center gap-1.5 hover:scale-[1.03]"
         >
           {locked ? <Lock size={12} /> : <Eye size={14} />}
           <span>{locked ? 'Sign in' : read ? 'Read Again' : 'Preview'}</span>

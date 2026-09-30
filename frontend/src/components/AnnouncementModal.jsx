@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ExternalLink, Lock } from 'lucide-react'
+import { X, ExternalLink, Lock, Calendar } from 'lucide-react'
 import { useReadTracking } from '../hooks/useReadTracking'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import UniversityLogo from './UniversityLogo'
+import { matchUniversity } from '../lib/matchUniversity'
 
 export default function AnnouncementModal({ item, onClose }) {
   const { markRead } = useReadTracking()
@@ -33,6 +35,13 @@ export default function AnnouncementModal({ item, onClose }) {
     }
   }
 
+  const university = item
+    ? matchUniversity(item) || {
+        name: item.university_name,
+        code: item.university_code || 'UNI',
+      }
+    : null
+
   return (
     <AnimatePresence>
       {item && (
@@ -53,25 +62,59 @@ export default function AnnouncementModal({ item, onClose }) {
             transition={{ type: 'spring', stiffness: 260, damping: 22 }}
             className="relative bg-white rounded-[2rem] shadow-modal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col z-10"
           >
-            <div className="p-6 md:p-8 border-b border-gray-100 flex justify-between items-start sticky top-0 bg-white/90 backdrop-blur-md z-10">
-              <div className="space-y-3 pr-4">
+            {item.image_url && (
+              <div className="relative w-full h-48 sm:h-64 bg-gray-100 overflow-hidden">
+                <img
+                  src={item.image_url}
+                  alt={item.title}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+                <button
+                  onClick={onClose}
+                  className="absolute top-4 right-4 p-2 rounded-full bg-white/90 backdrop-blur-md hover:bg-white transition-all duration-300 hover:rotate-90 shadow-md"
+                  aria-label="Close"
+                >
+                  <X size={18} className="text-apple-dark" />
+                </button>
+              </div>
+            )}
+
+            <div className={`p-6 md:p-8 border-b border-gray-100 flex justify-between items-start sticky top-0 bg-white/95 backdrop-blur-md z-10 ${item.image_url ? 'pt-6' : ''}`}>
+              <div className="space-y-3 pr-4 flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <UniversityLogo university={university} size={40} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-apple-dark truncate">
+                      {item.university_name}
+                    </p>
+                    <p className="text-[10px] text-apple-gray uppercase tracking-wider">
+                      {item.institution_type || 'University'}
+                    </p>
+                  </div>
+                </div>
                 <div className="flex flex-wrap gap-2">
-                  <span className="bg-blue-50 text-apple-blue text-[11px] font-semibold px-3 py-1 rounded-full border border-blue-100 uppercase tracking-wide">
-                    {item.institution_type || 'University'}
-                  </span>
-                  <span className="bg-gray-50 text-apple-gray text-[11px] font-medium px-3 py-1 rounded-full border border-gray-100">
+                  <span className="bg-blue-50 text-apple-blue text-[11px] font-semibold px-3 py-1 rounded-full border border-blue-100">
                     {item.category}
                   </span>
                 </div>
-                <h3 className="font-semibold text-xl md:text-2xl leading-snug">{item.title}</h3>
+                <h3 className="font-semibold text-xl md:text-2xl leading-snug">
+                  {item.title}
+                </h3>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 rounded-full bg-gray-50 hover:bg-gray-100 transition-all duration-300 hover:rotate-90 flex-shrink-0"
-                aria-label="Close"
-              >
-                <X size={18} className="text-apple-gray" />
-              </button>
+              {!item.image_url && (
+                <button
+                  onClick={onClose}
+                  className="p-2 rounded-full bg-gray-50 hover:bg-gray-100 transition-all duration-300 hover:rotate-90 flex-shrink-0"
+                  aria-label="Close"
+                >
+                  <X size={18} className="text-apple-gray" />
+                </button>
+              )}
             </div>
 
             <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar flex-grow space-y-6 bg-gray-50/30">
@@ -100,7 +143,8 @@ export default function AnnouncementModal({ item, onClose }) {
             </div>
 
             <div className="p-6 md:p-8 border-t border-gray-100 bg-white flex flex-col sm:flex-row justify-between items-center gap-4">
-              <span className="text-xs text-apple-gray font-medium">
+              <span className="text-xs text-apple-gray font-medium flex items-center gap-1.5">
+                <Calendar size={12} />
                 Scraped: {new Date(item.date_scraped).toLocaleDateString()}
               </span>
               <a

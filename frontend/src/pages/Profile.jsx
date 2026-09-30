@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { universitiesData } from '../data/universities'
+import { EMAIL_FREQUENCIES } from '../lib/emailPreferences'
+import UniversityLogo from '../components/UniversityLogo'
 
 const CATEGORIES = [
   { key: 'Post-UTME', label: 'Post-UTME', icon: FileText, color: 'blue' },
@@ -37,6 +39,7 @@ export default function Profile() {
   const [interests, setInterests] = useState([])
   const [followedUniversities, setFollowedUniversities] = useState([])
   const [newsletterEnabled, setNewsletterEnabled] = useState(true)
+  const [emailFrequency, setEmailFrequency] = useState('instant')
   const [uniSearch, setUniSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -46,6 +49,7 @@ export default function Profile() {
       setInterests(profile.interests || [])
       setFollowedUniversities(profile.followedUniversities || [])
       setNewsletterEnabled(profile.newsletterEnabled !== false)
+      setEmailFrequency(profile.emailFrequency || 'instant')
     }
   }, [profile])
 
@@ -67,6 +71,7 @@ export default function Profile() {
       interests,
       followedUniversities,
       newsletterEnabled,
+      emailFrequency,
     })
     setSaving(false)
     setSaved(true)
@@ -237,13 +242,7 @@ export default function Profile() {
                     : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
                 }`}
               >
-                <div
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 transition-colors ${
-                    active ? 'bg-purple-600 text-white' : 'bg-apple-bg text-apple-dark'
-                  }`}
-                >
-                  {uni.code.charAt(0)}
-                </div>
+                <UniversityLogo university={uni} size={36} rounded="rounded-lg" />
                 <div className="min-w-0 flex-1">
                   <p
                     className={`text-xs font-semibold truncate ${
@@ -261,29 +260,25 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Newsletter Toggle */}
+      {/* Newsletter Preferences */}
       <div className="bg-white rounded-[2rem] p-8 shadow-apple border border-gray-100 mb-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-start gap-4 flex-1">
-            <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                newsletterEnabled ? 'bg-green-50' : 'bg-gray-100'
-              }`}
-            >
-              {newsletterEnabled ? (
-                <Bell size={20} className="text-green-600" />
-              ) : (
-                <BellOff size={20} className="text-apple-gray" />
-              )}
-            </div>
-            <div className="flex-1">
-              <h2 className="text-lg font-semibold">Newsletter & Alerts</h2>
-              <p className="text-sm text-apple-gray leading-relaxed">
-                {newsletterEnabled
-                  ? 'You\'ll receive emails and WhatsApp alerts when new announcements match your interests.'
-                  : 'You won\'t receive any emails or alerts. You can turn this back on anytime.'}
-              </p>
-            </div>
+        <div className="flex items-start gap-4 mb-6">
+          <div
+            className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              newsletterEnabled ? 'bg-green-50' : 'bg-gray-100'
+            }`}
+          >
+            {newsletterEnabled ? (
+              <Bell size={20} className="text-green-600" />
+            ) : (
+              <BellOff size={20} className="text-apple-gray" />
+            )}
+          </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold">Email Preferences</h2>
+            <p className="text-sm text-apple-gray">
+              Choose when we send you updates about your interests and followed universities.
+            </p>
           </div>
           <button
             onClick={() => setNewsletterEnabled((v) => !v)}
@@ -298,6 +293,47 @@ export default function Profile() {
             />
           </button>
         </div>
+
+        {newsletterEnabled && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="space-y-2"
+          >
+            <p className="text-xs font-semibold text-apple-dark uppercase tracking-wider mb-3">
+              Send me updates:
+            </p>
+            {EMAIL_FREQUENCIES.filter((f) => f.value !== 'off').map(({ value, label, description }) => {
+              const active = emailFrequency === value
+              return (
+                <button
+                  key={value}
+                  onClick={() => setEmailFrequency(value)}
+                  className={`w-full flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all duration-300 ${
+                    active
+                      ? 'border-apple-blue bg-blue-50'
+                      : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${
+                      active ? 'border-apple-blue bg-apple-blue' : 'border-gray-300'
+                    }`}
+                  >
+                    {active && <Check size={12} className="text-white" strokeWidth={3} />}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-sm font-semibold ${active ? 'text-apple-blue' : 'text-apple-dark'}`}>
+                      {label}
+                    </p>
+                    <p className="text-xs text-apple-gray mt-0.5 leading-relaxed">{description}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </motion.div>
+        )}
       </div>
 
       {/* Save Button */}

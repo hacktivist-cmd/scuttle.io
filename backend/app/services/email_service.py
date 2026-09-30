@@ -1,0 +1,367 @@
+import os
+import logging
+import smtplib
+import ssl
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formataddr, formatdate, make_msgid
+from typing import List, Dict
+
+logger = logging.getLogger("email_service")
+
+GMAIL_USER = os.getenv("GMAIL_USER", "")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
+GMAIL_FROM_NAME = os.getenv("GMAIL_FROM_NAME", "Scuttle.io")
+
+SITE_URL = os.getenv("SITE_URL", "https://scuttle-io.netlify.app")
+LOGO_URL = f"{SITE_URL}/logo.png"
+
+
+def _is_configured() -> bool:
+    return bool(GMAIL_USER and GMAIL_APP_PASSWORD and len(GMAIL_APP_PASSWORD) == 16)
+
+
+# ══════════════════════════════════════════════════════════
+#  SHARED PARTIALS
+# ══════════════════════════════════════════════════════════
+
+def _header_html() -> str:
+    return f"""
+    <tr>
+      <td align="center" style="padding:32px 24px 24px;">
+        <table cellpadding="0" cellspacing="0" border="0" role="presentation">
+          <tr>
+            <td align="center" style="padding:0;">
+              <img src="{LOGO_URL}" alt="Scuttle.io" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:16px;background:#ffffff;border:1px solid #E5E7EB;object-fit:contain;" />
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:14px 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:18px;font-weight:600;color:#1D1D1F;letter-spacing:-0.3px;">
+              Scuttle.io
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    """
+
+
+def _footer_html(unsubscribe_url: str = "") -> str:
+    if not unsubscribe_url:
+        unsubscribe_url = f"{SITE_URL}/profile"
+    return f"""
+    <tr>
+      <td align="center" style="padding:32px 24px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:#86868B;">
+        <p style="margin:0 0 8px;">You're receiving this because you subscribed to Scuttle.io updates.</p>
+        <p style="margin:0 0 16px;">
+          <a href="{unsubscribe_url}" style="color:#86868B;text-decoration:underline;">Unsubscribe</a>
+          &nbsp;·&nbsp;
+          <a href="{SITE_URL}" style="color:#86868B;text-decoration:underline;">Visit Site</a>
+          &nbsp;·&nbsp;
+          <a href="{SITE_URL}/universities" style="color:#86868B;text-decoration:underline;">Universities</a>
+        </p>
+        <p style="margin:0;font-size:11px;color:#A1A1A6;">
+          Scuttle.io · DARKGRID_AUTOMATION<br>
+          You received this email because you signed up at scuttle.io.
+        </p>
+      </td>
+    </tr>
+    """
+
+
+def _wrap(inner: str, preheader: str = "") -> str:
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <meta name="color-scheme" content="light" />
+  <title>Scuttle.io</title>
+</head>
+<body style="margin:0;padding:0;background:#F5F5F7;width:100%;">
+  <div style="display:none;font-size:1px;color:#F5F5F7;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">{preheader}</div>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#F5F5F7;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="max-width:600px;width:100%;">
+          {_header_html()}
+          {inner}
+          {_footer_html()}
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+
+# ══════════════════════════════════════════════════════════
+#  TEMPLATE 1 — NEWSLETTER
+# ══════════════════════════════════════════════════════════
+
+def _render_newsletter(subject: str, message: str, recipient_name: str) -> str:
+    greeting = f"Hi {recipient_name}," if recipient_name else "Hi there,"
+    paragraphs = "".join(
+        f'<p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#1D1D1F;">{p}</p>'
+        for p in message.split("\n\n")
+        if p.strip()
+    )
+
+    inner = f"""
+    <tr>
+      <td style="padding:0 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#FFFFFF;border-radius:24px;box-shadow:0 4px 24px rgba(0,0,0,0.06);overflow:hidden;">
+          <tr>
+            <td style="padding:40px 36px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <h1 style="margin:0 0 24px;font-size:26px;font-weight:600;color:#1D1D1F;letter-spacing:-0.5px;line-height:1.3;">{subject}</h1>
+              <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#1D1D1F;">{greeting}</p>
+              {paragraphs}
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top:28px;">
+                <tr>
+                  <td style="background:#0071E3;border-radius:12px;">
+                    <a href="{SITE_URL}" style="display:inline-block;padding:14px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:500;color:#FFFFFF;text-decoration:none;">Open Scuttle.io</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    """
+
+    return _wrap(inner, preheader=f"{subject} — from Scuttle.io")
+
+
+# ══════════════════════════════════════════════════════════
+#  TEMPLATE 2 — ANNOUNCEMENT ALERT
+# ══════════════════════════════════════════════════════════
+
+def _render_announcement(
+    university: str,
+    category: str,
+    title: str,
+    summary: str,
+    source_url: str,
+    recipient_name: str = "",
+    image_url: str = "",
+    reason: str = "",
+) -> str:
+    greeting = f"Hi {recipient_name}," if recipient_name else "Hi there,"
+    summary_text = summary if summary else "Click below to read the full notice on the institution's website."
+
+    badge_colors = {
+        "Post-UTME": ("#EFF6FF", "#0071E3"),
+        "Admission List": ("#F0FDF4", "#16A34A"),
+        "JAMB CAPS": ("#FAF5FF", "#9333EA"),
+        "School Fees": ("#FFFBEB", "#D97706"),
+        "JAMB Registration": ("#EEF2FF", "#4F46E5"),
+        "Academic Calendar": ("#FFF1F2", "#E11D48"),
+    }
+    bg, fg = badge_colors.get(category, ("#F3F4F6", "#6B7280"))
+
+    hero = ""
+    if image_url:
+        hero = f"""
+        <tr>
+          <td style="padding:0;">
+            <img src="{image_url}" alt="" width="600" style="display:block;width:100%;max-width:600px;height:220px;object-fit:cover;border-top-left-radius:24px;border-top-right-radius:24px;" />
+          </td>
+        </tr>
+        """
+
+    reason_banner = ""
+    if reason:
+        reason_banner = f"""
+        <tr>
+          <td style="padding:16px 36px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#EFF6FF;border:1px solid #DBEAFE;border-radius:12px;">
+              <tr>
+                <td style="padding:12px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;color:#0071E3;line-height:1.5;">
+                  🎯 <strong>Why you're seeing this:</strong> {reason}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        """
+
+    inner = f"""
+    <tr>
+      <td style="padding:0 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#FFFFFF;border-radius:24px;box-shadow:0 4px 24px rgba(0,0,0,0.06);overflow:hidden;">
+          {hero}
+          {reason_banner}
+          <tr>
+            <td style="padding:32px 36px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <span style="display:inline-block;padding:5px 12px;border-radius:9999px;font-size:11px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;background:{bg};color:{fg};margin-bottom:16px;">{category}</span>
+              <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#86868B;letter-spacing:0.5px;text-transform:uppercase;">{university}</p>
+              <h1 style="margin:0 0 20px;font-size:24px;font-weight:600;color:#1D1D1F;letter-spacing:-0.4px;line-height:1.35;">{title}</h1>
+              <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#1D1D1F;">{greeting}</p>
+              <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#6B7280;">{summary_text}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 36px;">
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-top:1px solid #F3F4F6;padding-top:24px;width:100%;">
+                <tr>
+                  <td>
+                    <a href="{source_url}" style="display:inline-block;background:#0071E3;color:#FFFFFF;text-decoration:none;padding:14px 28px;border-radius:12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:500;">Read Full Notice →</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    """
+
+    return _wrap(inner, preheader=f"{university}: {title[:80]}")
+
+
+# ══════════════════════════════════════════════════════════
+#  TEMPLATE 3 — WEEKLY DIGEST
+# ══════════════════════════════════════════════════════════
+
+def _render_digest(subject: str, items: List[Dict], recipient_name: str = "") -> str:
+    greeting = f"Hi {recipient_name}," if recipient_name else "Hi there,"
+
+    rows = ""
+    for i, item in enumerate(items):
+        border = "" if i == len(items) - 1 else "border-bottom:1px solid #F3F4F6;"
+        title_text = item.get("title", "")
+        summary_short = (item.get("summary") or "")[:140]
+        uni_name = item.get("university_name", "")
+        cat = item.get("category", "")
+        url = item.get("source_url", SITE_URL)
+        rows += f"""
+        <tr>
+          <td style="padding:20px 0;{border}">
+            <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#0071E3;letter-spacing:0.4px;text-transform:uppercase;">{uni_name} · {cat}</p>
+            <a href="{url}" style="margin:0 0 6px;font-size:16px;font-weight:600;color:#1D1D1F;text-decoration:none;line-height:1.4;display:block;">{title_text}</a>
+            <p style="margin:0;font-size:14px;line-height:1.6;color:#6B7280;">{summary_short}…</p>
+          </td>
+        </tr>
+        """
+
+    inner = f"""
+    <tr>
+      <td style="padding:0 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#FFFFFF;border-radius:24px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+          <tr>
+            <td style="padding:40px 36px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <h1 style="margin:0 0 8px;font-size:26px;font-weight:600;color:#1D1D1F;letter-spacing:-0.5px;line-height:1.3;">{subject}</h1>
+              <p style="margin:0 0 24px;font-size:15px;color:#6B7280;">{greeting} Here are this week's updates tailored to your interests.</p>
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">{rows}</table>
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top:28px;">
+                <tr>
+                  <td style="background:#1D1D1F;border-radius:12px;">
+                    <a href="{SITE_URL}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:500;color:#FFFFFF;text-decoration:none;">See All Updates</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    """
+
+    return _wrap(inner, preheader=f"{len(items)} new updates for you")
+
+
+# ══════════════════════════════════════════════════════════
+#  SENDERS (with anti-spam headers)
+# ══════════════════════════════════════════════════════════
+
+def _send_html(to_email: str, subject: str, html: str, list_unsubscribe: bool = True) -> bool:
+    if not _is_configured():
+        logger.warning(f"Email skipped (Gmail not configured): {to_email}")
+        return False
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = formataddr((GMAIL_FROM_NAME, GMAIL_USER))
+        msg["To"] = to_email
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain="scuttle.io")
+        msg["Reply-To"] = GMAIL_USER
+        msg["X-Mailer"] = "Scuttle.io Mailer"
+
+        # ── Anti-spam headers ──
+        msg["Precedence"] = "bulk"
+        msg["Auto-Submitted"] = "auto-generated"
+        if list_unsubscribe:
+            unsub_url = f"{SITE_URL}/profile"
+            msg["List-Unsubscribe"] = f"<mailto:{GMAIL_USER}?subject=unsubscribe>, <{unsub_url}>"
+            msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+
+        msg.attach(MIMEText(html, "html"))
+
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_USER, to_email, msg.as_string())
+        logger.info(f"📧 Sent to {to_email}: {subject[:60]}")
+        return True
+    except smtplib.SMTPAuthenticationError:
+        logger.error("Gmail auth failed. Check App Password in .env")
+        return False
+    except Exception as e:
+        logger.error(f"Email failed for {to_email}: {e}")
+        return False
+
+
+def send_email(to_email: str, subject: str, message: str, recipient_name: str = "") -> bool:
+    html = _render_newsletter(subject, message, recipient_name)
+    return _send_html(to_email, subject, html)
+
+
+def send_announcement_alert(
+    to_email: str,
+    recipient_name: str,
+    university: str,
+    category: str,
+    title: str,
+    summary: str,
+    source_url: str,
+    image_url: str = "",
+    reason: str = "",
+) -> bool:
+    subject = f"🚨 {university}: {title[:70]}"
+    html = _render_announcement(
+        university=university,
+        category=category,
+        title=title,
+        summary=summary,
+        source_url=source_url,
+        recipient_name=recipient_name,
+        image_url=image_url,
+        reason=reason,
+    )
+    return _send_html(to_email, subject, html)
+
+
+def send_digest(to_email: str, recipient_name: str, subject: str, items: List[Dict]) -> bool:
+    html = _render_digest(subject, items, recipient_name)
+    return _send_html(to_email, subject, html)
+
+
+def send_bulk(recipients: List[Dict], subject: str, message: str) -> Dict:
+    from time import sleep
+    ok, failed = 0, 0
+    for r in recipients:
+        email = r.get("email")
+        name = r.get("name", "")
+        if not email:
+            failed += 1
+            continue
+        if send_email(email, subject, message, name):
+            ok += 1
+        else:
+            failed += 1
+        sleep(0.6)
+    return {"sent": ok, "failed": failed, "total": len(recipients)}

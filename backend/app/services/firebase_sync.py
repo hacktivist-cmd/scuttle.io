@@ -25,8 +25,8 @@ def init_firebase():
     try:
         if not firebase_admin._apps:
             if cred_b64:
-                cred_json = json.loads(base64.b64decode(cred_b64))
-                cred = credentials.Certificate(cred_json)
+                cred_dict = json.loads(base64.b64decode(cred_b64).decode("utf-8"))
+                cred = credentials.Certificate(cred_dict)
             elif os.path.exists(cred_path):
                 cred = credentials.Certificate(cred_path)
             else:
@@ -66,6 +66,9 @@ def push_announcement(payload):
             "source_url": payload.get("source_url", ""),
             "pdf_extracted_text": payload.get("pdf_extracted_text") or "",
             "date_scraped": payload.get("date_scraped", datetime.utcnow().isoformat()),
+            "priority": payload.get("priority", "normal"),
+            "university_code": payload.get("university_code", ""),
+            "image_url": payload.get("image_url", ""),
         }
 
         if doc_id:

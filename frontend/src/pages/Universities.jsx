@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, ExternalLink, ChevronRight } from 'lucide-react'
 import { universitiesData } from '../data/universities'
 import RevealWrapper from '../components/RevealWrapper'
+import UniversityLogo from '../components/UniversityLogo'
 import { useSEO } from '../hooks/useSEO'
 
 const TYPES = [
@@ -54,10 +55,7 @@ export default function Universities() {
       <RevealWrapper delay={100}>
         <div className="bg-white rounded-[2rem] p-6 shadow-apple border border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between mb-8 max-w-4xl mx-auto">
           <div className="w-full md:w-1/2 relative">
-            <Search
-              size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-apple-gray pointer-events-none"
-            />
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-apple-gray pointer-events-none" />
             <input
               type="text"
               value={search}
@@ -72,9 +70,7 @@ export default function Universities() {
             className="w-full md:w-auto bg-apple-bg border-transparent rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-apple-blue focus:bg-white transition-all duration-300 cursor-pointer"
           >
             {TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
+              <option key={t.value} value={t.value}>{t.label}</option>
             ))}
           </select>
         </div>
@@ -95,11 +91,9 @@ export default function Universities() {
             >
               <button
                 onClick={() => handleUniClick(uni)}
-                className="flex items-center gap-4 flex-1 text-left"
+                className="flex items-center gap-4 flex-1 text-left min-w-0"
               >
-                <div className="w-12 h-12 rounded-xl bg-apple-bg flex items-center justify-center text-apple-dark font-bold text-lg border border-gray-200 transition-colors duration-300 group-hover:bg-apple-blue group-hover:text-white flex-shrink-0">
-                  {uni.code.charAt(0)}
-                </div>
+                <UniversityLogo university={uni} size={48} />
                 <div className="min-w-0">
                   <h4 className="font-semibold text-sm leading-tight transition-colors group-hover:text-apple-blue truncate">
                     {uni.name}

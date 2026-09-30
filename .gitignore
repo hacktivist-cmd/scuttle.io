@@ -11,14 +11,15 @@ venv/
 venv*/
 .venv/
 
-# Environment
+# Environment — catch ALL .env variants
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # Firebase
 firebase-service-account.json
 firebase-key.b64
+firebase-service-account*.json
 
 # Celery
 celerybeat-schedule*
