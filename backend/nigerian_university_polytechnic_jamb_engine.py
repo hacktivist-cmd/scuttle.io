@@ -730,6 +730,83 @@ def classify_session(text: str) -> str:
     return "unknown"
 
 
+
+
+# ==================== Multi-Path Scraper ====================
+
+COMMON_NEWS_PATHS = [
+    "",  # homepage
+    "/news",
+    "/blog",
+    "/admissions",
+    "/announcements",
+    "/press",
+    "/updates",
+    "/latest-news",
+    "/category/news",
+    "/category/admissions",
+]
+
+
+def scrape_multipath_institution(uni_id: str, base_url: str, uni_name: str) -> int:
+    """Try multiple common paths to find news/announcements. Returns count of new items."""
+    from datetime import timedelta as _td
+    import time as _time
+
+    db = SessionLocal()
+    try:
+        before_count = db.query(AnnouncementModel).filter(
+            AnnouncementModel.university_id == uni_id
+        ).count()
+    finally:
+        db.close()
+
+    # Try WP API first
+    ok = scrape_wordpress_institution(uni_id, base_url, uni_name)
+    if not ok:
+        # Try HTML on homepage
+        scrape_html_institution(uni_id, base_url, uni_name)
+
+    # Also try common news subpaths
+    base = base_url.rstrip("/")
+    for path in COMMON_NEWS_PATHS[1:]:  # skip "" (already done)
+        try:
+            test_url = f"{base}{path}"
+            headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
+            r = requests.get(test_url, headers=headers, timeout=3)
+            if r.status_code == 200:
+                # Parse links from this page
+                soup = BeautifulSoup(r.text, "html.parser")
+                for link_tag in soup.find_all("a", href=True):
+                    title = link_tag.get_text().strip()
+                    href = link_tag["href"]
+                    if len(title) > 20:
+                        keywords = ["admission", "post-utme", "screening", "merit", "fees",
+                                    "calendar", "notice", "2026", "2027", "registration"]
+                        if any(kw in title.lower() for kw in keywords):
+                            full_url = href if href.startswith("http") else f"{base}/{href.lstrip('/')}"
+                            submit_scraped_item_to_backend(
+                                university_id=uni_id,
+                                title=title,
+                                source_url=full_url,
+                                summary=f"Discovered via {path} crawler for {uni_name}",
+                            )
+            _time.sleep(0.1)
+        except Exception:
+            continue
+
+    # Return count of new items
+    db = SessionLocal()
+    try:
+        after_count = db.query(AnnouncementModel).filter(
+            AnnouncementModel.university_id == uni_id
+        ).count()
+        return after_count - before_count
+    finally:
+        db.close()
+
+
+
 def submit_scraped_item_to_backend(university_id, title, source_url, summary=None, attachment_url=None):
     category = classify_announcement_category(title)
     slug_hash = hashlib.sha256(f"{university_id}-{title.strip().lower()}".encode()).hexdigest()
@@ -1672,6 +1749,93 @@ def push_status():
         "valid_tokens": tokens,
         "platforms": platforms,
     }
+
+
+
+
+# ==================== Force Scrape ALL Endpoint ====================
+
+@celery_app.task(name="main.scrape_all_force")
+def scrape_all_force():
+    """Force-scrape every active university, ignoring last_scraped_at."""
+    from datetime import timedelta as _td
+
+    db = SessionLocal()
+    try:
+        all_insts = db.query(UniversityModel).filter(UniversityModel.is_active == True).all()
+        logger.info(f"🚀 FORCE SCRAPE: {len(all_insts)} universities")
+
+        succeeded, failed, empty = 0, 0, 0
+        failed_list = []
+        empty_list = []
+
+        for i, inst in enumerate(all_insts, 1):
+            try:
+                # Count announcements before scrape
+                before_count = db.query(AnnouncementModel).filter(
+                    AnnouncementModel.university_id == inst.id
+                ).count()
+
+                # MULTIPATH_WIRED — try multiple paths
+                if inst.short_code == "JAMB":
+                    scrape_html_institution(str(inst.id), inst.base_url, inst.name)
+                else:
+                    scrape_multipath_institution(str(inst.id), inst.base_url, inst.name)
+
+                # Count after
+                after_count = db.query(AnnouncementModel).filter(
+                    AnnouncementModel.university_id == inst.id
+                ).count()
+                new_items = after_count - before_count
+
+                # Update tracking
+                inst.last_scraped_at = datetime.utcnow()
+                if new_items > 0:
+                    inst.last_scrape_status = "ok"
+                    inst.last_scrape_error = None
+                    inst.consecutive_failures = "0"
+                    succeeded += 1
+                    logger.info(f"  [{i}/{len(all_insts)}] ✅ {inst.short_code} (+{new_items})")
+                else:
+                    inst.last_scrape_status = "empty"
+                    inst.last_scrape_error = "Scraped but no new content found"
+                    empty += 1
+                    empty_list.append(inst.short_code)
+                    logger.info(f"  [{i}/{len(all_insts)}] ⚪ {inst.short_code} (no new content)")
+                db.commit()
+            except Exception as e:
+                failed += 1
+                failed_list.append(f"{inst.short_code}: {str(e)[:50]}")
+                inst.last_scrape_status = "failed"
+                inst.last_scrape_error = str(e)[:500]
+                try:
+                    inst.consecutive_failures = str(int(inst.consecutive_failures or 0) + 1)
+                except Exception:
+                    inst.consecutive_failures = "1"
+                db.commit()
+                logger.warning(f"  [{i}/{len(all_insts)}] ❌ {inst.short_code}: {str(e)[:80]}")
+
+        logger.info(f"🎉 FORCE SCRAPE COMPLETE: {succeeded} ✅ / {empty} ⚪ / {failed} ❌")
+        if empty_list:
+            logger.info(f"   Empty (no new content): {', '.join(empty_list[:30])}")
+        if failed_list:
+            logger.info(f"   Failed: {' | '.join(failed_list[:15])}")
+
+        return {
+            "total": len(all_insts),
+            "succeeded": succeeded,
+            "empty": empty,
+            "failed": failed,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/v1/admin/scrape-all-force", tags=["Admin"])
+def trigger_force_scrape():
+    """Force-scrape ALL universities (bypasses due-check)."""
+    scrape_all_force.delay()
+    return {"status": "queued", "message": "Force-scrape dispatched for all universities"}
 
 
 @app.get("/", tags=["Health Check"])
