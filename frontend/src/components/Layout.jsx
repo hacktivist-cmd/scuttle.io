@@ -4,6 +4,7 @@ import Footer from './Footer'
 import ScrollProgressBar from './ScrollProgressBar'
 import ScrollTopButton from './ScrollTopButton'
 import InstallPrompt from './InstallPrompt'
+import NotificationPrompt from './NotificationPrompt'
 
 export default function Layout() {
   return (
@@ -16,6 +17,7 @@ export default function Layout() {
       <Footer />
       <ScrollTopButton />
       <InstallPrompt />
+      <NotificationPrompt />
     </div>
   )
 }

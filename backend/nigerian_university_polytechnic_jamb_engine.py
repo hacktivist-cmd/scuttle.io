@@ -44,21 +44,25 @@ celery_app.conf.timezone = "Africa/Lagos"
 
 # ==================== Beat Schedule ====================
 celery_app.conf.beat_schedule = {
-    "scrape-all-institutions-and-jamb-dynamic": {
+    # Scrape every 30 minutes — most aggressive, best for real-time feel
+    "scrape-all-institutions": {
         "task": "main.run_all_scrapers_and_jamb",
-        "schedule": 43200.0,
+        "schedule": crontab(minute="*/30"),
     },
-    "cleanup-old-announcements-daily": {
-        "task": "main.cleanup_old_announcements",
-        "schedule": crontab(hour=2, minute=0),
-    },
+    # Daily digest at 8 AM Lagos
     "send-daily-digests": {
         "task": "main.send_daily_digests",
         "schedule": crontab(hour=8, minute=0),
     },
+    # Weekly digest Monday 8 AM
     "send-weekly-digests": {
         "task": "main.send_weekly_digests",
         "schedule": crontab(hour=8, minute=0, day_of_week="mon"),
+    },
+    # Cleanup at 2 AM
+    "cleanup-old-announcements": {
+        "task": "main.cleanup_old_announcements",
+        "schedule": crontab(hour=2, minute=0),
     },
 }
 
@@ -556,7 +560,7 @@ def extract_date_from_page(url: str):
     """Fetch a page and try to extract the publication date. IMPROVED_DATE_SCAN_V3"""
     try:
         headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
-        r = requests.get(url, headers=headers, timeout=5)
+        r = requests.get(url, headers=headers, timeout=3)
         if r.status_code != 200:
             return None
         soup = BeautifulSoup(r.text, "html.parser")
@@ -636,7 +640,7 @@ def extract_image_from_page(url: str) -> str:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ScuttleBot/2.0"
         }
-        r = requests.get(url, headers=headers, timeout=5)
+        r = requests.get(url, headers=headers, timeout=3)
         if r.status_code != 200:
             return ""
 
@@ -815,6 +819,20 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
             })
         except Exception as fb_err:
             logger.warning(f"Firebase sync skipped: {fb_err}")
+
+        # PUSH_NOTIFY_MARKER — send FCM push to interested users
+        try:
+            from app.services.push_service import notify_users_about_announcement
+            notify_users_about_announcement({
+                "university_name": uni.name,
+                "university_code": uni.short_code,
+                "category": category,
+                "title": title,
+                "summary": summary or "",
+                "source_url": source_url,
+            })
+        except Exception as push_err:
+            logger.warning(f"Push notification skipped: {push_err}")
     except Exception as e:
         db.rollback()
         logger.error(f"Ingest error: {e}")
@@ -826,7 +844,7 @@ def scrape_wordpress_institution(uni_id, base_url, uni_name):
     headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
     try:
         url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts?per_page=10"
-        r = requests.get(url, headers=headers, timeout=5)
+        r = requests.get(url, headers=headers, timeout=3)
         if r.status_code == 200:
             for post in r.json():
                 t_html = post.get("title", {}).get("rendered", "")
@@ -845,7 +863,7 @@ def scrape_wordpress_institution(uni_id, base_url, uni_name):
 def scrape_html_institution(uni_id, base_url, uni_name):
     headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
     try:
-        r = requests.get(base_url, headers=headers, timeout=5)
+        r = requests.get(base_url, headers=headers, timeout=3)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, "html.parser")
             for a in soup.find_all("a", href=True):
@@ -867,8 +885,20 @@ def run_all_scrapers_and_jamb():
 
     db = SessionLocal()
     try:
-        all_insts = db.query(UniversityModel).filter(UniversityModel.is_active == True).all()
-        logger.info(f"🚀 Scraper starting for {len(all_insts)} universities...")
+        # SMART_REFRESH_V1 — only re-scrape if it's been 1+ hours
+        from datetime import timedelta as _td
+
+        cutoff = datetime.utcnow() - _td(hours=1)
+        all_insts = db.query(UniversityModel).filter(
+            UniversityModel.is_active == True,
+            ((UniversityModel.last_scraped_at == None) | (UniversityModel.last_scraped_at < cutoff))
+        ).all()
+
+        if not all_insts:
+            logger.info("⏭️  No universities due for scrape — skipping")
+            return
+
+        logger.info(f"🚀 Scraper starting for {len(all_insts)} universities due...")
 
         # BATCH_SCRAPER_V2 — chunk into groups of 20, sleep between batches
         BATCH_SIZE = 20
@@ -1573,6 +1603,74 @@ def diagnostic(db: Session = Depends(get_db)):
         "universities_total": unis_total,
         "universities_with_scrapes": unis_scraped,
         "universities_last_hour": recent,
+    }
+
+
+
+
+# ==================== Test Push Endpoint ====================
+
+@app.post("/api/v1/admin/test-push", tags=["Admin"])
+def test_push():
+    """Send a test push to all subscribed users."""
+    from app.services.push_service import send_push_to_users_multicast
+    from app.services.firebase_sync import init_firebase
+
+    client = init_firebase()
+    if not client:
+        return {"status": "error", "message": "Firebase unavailable"}
+
+    tokens = []
+    for doc in client.collection("users").stream():
+        u = doc.to_dict()
+        if u.get("pushEnabled") and u.get("fcmToken"):
+            tokens.append(u["fcmToken"])
+
+    if not tokens:
+        return {"status": "no_subscribers", "count": 0}
+
+    result = send_push_to_users_multicast(
+        tokens=tokens,
+        title="🔔 Test from Scuttle.io",
+        body="If you see this, push notifications work!",
+        url="/",
+    )
+    return {"status": "sent", "subscribers": len(tokens), "result": result}
+
+
+
+
+# ==================== Push Status Endpoint ====================
+
+@app.get("/api/v1/admin/push-status", tags=["Admin"])
+def push_status():
+    """Check how many users have push notifications enabled."""
+    from app.services.firebase_sync import init_firebase
+
+    client = init_firebase()
+    if not client:
+        return {"error": "Firebase unavailable"}
+
+    total = 0
+    enabled = 0
+    tokens = 0
+    platforms = {"ios": 0, "android": 0, "desktop": 0}
+
+    for doc in client.collection("users").stream():
+        u = doc.to_dict()
+        total += 1
+        if u.get("pushEnabled"):
+            enabled += 1
+            if u.get("fcmToken"):
+                tokens += 1
+            plat = u.get("fcmPlatform", "desktop")
+            platforms[plat] = platforms.get(plat, 0) + 1
+
+    return {
+        "total_users": total,
+        "push_enabled": enabled,
+        "valid_tokens": tokens,
+        "platforms": platforms,
     }
 
 

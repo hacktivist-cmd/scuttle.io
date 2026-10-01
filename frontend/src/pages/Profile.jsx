@@ -12,6 +12,7 @@ import { universitiesData } from '../data/universities'
 import { EMAIL_FREQUENCIES } from '../lib/emailPreferences'
 import { triggerSubscriptionEmail } from '../lib/emailApi'
 import ChangePassword from '../components/ChangePassword'
+import PushNotificationSettings from '../components/PushNotificationSettings'
 import UniversityLogo from '../components/UniversityLogo'
 
 const CATEGORIES = [
@@ -348,6 +349,9 @@ export default function Profile() {
           </motion.div>
         )}
       </div>
+
+      {/* Push Notifications */}
+      <PushNotificationSettings />
 
       {/* Change Password */}
       <ChangePassword />
