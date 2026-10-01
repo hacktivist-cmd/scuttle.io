@@ -37,7 +37,7 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.0"
 
-  # ── Celery Worker (background jobs) ──
+  # ── Celery Worker ──
   - type: worker
     name: scuttle-worker
     env: python
@@ -68,7 +68,7 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.0"
 
-  # ── Celery Beat (scheduler) ──
+  # ── Celery Beat ──
   - type: worker
     name: scuttle-beat
     env: python
@@ -89,15 +89,15 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.0"
 
+  # ── Redis (correctly nested under services) ──
+  - type: redis
+    name: scuttle-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
 databases:
   - name: scuttle-db
     plan: free
     databaseName: scuttle_db
     user: scuttle
-
-# Redis (Key Value)
-redis:
-  - name: scuttle-redis
-    plan: free
-    maxmemoryPolicy: noeviction
-    ipAllowList: []
