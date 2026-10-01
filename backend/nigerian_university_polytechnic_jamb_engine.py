@@ -23,11 +23,30 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# SYS_PATH_PATCHED — ensure `app` module is importable from Celery workers
+# SYS_PATH_PATCHED_V2 — ensure app module importable from Celery workers
 import sys as _sys
-_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+import os as _os
+from pathlib import Path as _Path
+
+_BACKEND_DIR = str(_Path(_os.path.abspath(__file__)).parent)
 if _BACKEND_DIR not in _sys.path:
     _sys.path.insert(0, _BACKEND_DIR)
+
+# Also ensure CWD is on path (billiard fork workers need this)
+_CWD = _os.getcwd()
+if _CWD not in _sys.path:
+    _sys.path.insert(0, _CWD)
+
+# Ensure 'app' package is explicitly importable
+try:
+    import app  # noqa: F401
+    import app.services  # noqa: F401
+    import app.services.firebase_sync  # noqa: F401
+    import app.services.push_service  # noqa: F401
+    print("✅ Pre-imported app.services for Celery workers", flush=True)
+except Exception as _e:
+    print(f"⚠️ Pre-import failed: {_e}", flush=True)
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("scuttle_engine")
@@ -714,17 +733,39 @@ _SESSION_OLD = [
 
 
 def classify_session(text: str) -> str:
-    """Return 'current' (2026/2027), 'old' (2025/2026 or older), or 'unknown'."""
+    """SESSION_FILTER_V3 — smarter year + bare year detection."""
     if not text:
         return "unknown"
     lower = text.lower()
 
+    # Current session — highest priority
     for pat in _SESSION_CURRENT:
         if pat.search(lower):
             return "current"
 
+    # Old sessions — any year pattern < 2026
     for pat in _SESSION_OLD:
         if pat.search(lower):
+            return "old"
+
+    import re as _re
+
+    # Catch bare year pairs: "2020/2021", "2021/2022"
+    year_pair = _re.findall(r'(20[12][0-9])\s*[/\-]\s*(20[12][0-9])', lower)
+    for y1, y2 in year_pair:
+        if int(y1) < 2026:
+            return "old"
+
+    # SESSION_FILTER_V3 — bare year detection
+    bare_years = _re.findall(r'\b(20[12][0-9])\b', lower)
+    for y in bare_years:
+        y_int = int(y)
+        # 2026 or 2027 → current
+        if y_int >= 2026:
+            return "current"
+        # 2025 or earlier → old (unless it's a small date like 2025-03-15 which
+        # would already be caught by session_old patterns)
+        if y_int < 2025:
             return "old"
 
     return "unknown"
@@ -1365,6 +1406,14 @@ def get_db():
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
+
+    # STARTUP_IMPORT_TEST
+    try:
+        from app.services.firebase_sync import init_firebase
+        from app.services.push_service import notify_users_about_announcement
+        logger.info("✅ app.services imports work in main process")
+    except Exception as e:
+        logger.error(f"❌ app.services import failed: {e}")
 
     # AUTO_MIGRATE_V1
     try:
