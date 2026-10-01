@@ -163,13 +163,13 @@ NIGERIAN_INSTITUTIONS_SEED = [
     {"name": 'University of Calabar', "short_code": 'UNICAL', "institution_type": 'Federal University', "base_url": 'https://unical.edu.ng'},
     {"name": 'University of Ibadan', "short_code": 'UI', "institution_type": 'Federal University', "base_url": 'https://ui.edu.ng'},
     {"name": 'University of Ilorin', "short_code": 'UNILORIN', "institution_type": 'Federal University', "base_url": 'https://unilorin.edu.ng'},
-    {"name": 'University of Jos', "short_code": 'UNIJOS', "institution_type": 'Federal University', "base_url": 'https://unijos.edu.ng'},
+    {"name": 'University of Jos', "short_code": 'UNIJOS', "institution_type": 'Federal University', "base_url": 'https://www.unijos.edu.ng'},
     {"name": 'University of Lagos', "short_code": 'UNILAG', "institution_type": 'Federal University', "base_url": 'https://unilag.edu.ng'},
     {"name": 'University of Maiduguri', "short_code": 'UNIMAID', "institution_type": 'Federal University', "base_url": 'https://unimaid.edu.ng'},
     {"name": 'University of Nigeria, Nsukka', "short_code": 'UNN', "institution_type": 'Federal University', "base_url": 'https://unn.edu.ng'},
     {"name": 'University of Port Harcourt', "short_code": 'UNIPORT', "institution_type": 'Federal University', "base_url": 'https://uniport.edu.ng'},
     {"name": 'University of Uyo', "short_code": 'UNIUYO', "institution_type": 'Federal University', "base_url": 'https://uniuyo.edu.ng'},
-    {"name": 'Usmanu Danfodiyo University, Sokoto', "short_code": 'UDUSOK', "institution_type": 'Federal University', "base_url": 'https://udusok.edu.ng'},
+    {"name": 'Usmanu Danfodiyo University, Sokoto', "short_code": 'UDUSOK', "institution_type": 'Federal University', "base_url": 'https://www.udusok.edu.ng'},
     {"name": 'Federal University of Health Sciences, Otukpo', "short_code": 'FUHSO', "institution_type": 'Federal University', "base_url": 'https://fuhso.edu.ng'},
     {"name": 'Federal University of Health Sciences, Ila Orangun', "short_code": 'FUHSI', "institution_type": 'Federal University', "base_url": 'https://fuhsi.edu.ng'},
     {"name": 'Federal University of Agriculture, Zuru', "short_code": 'FUAZ', "institution_type": 'Federal University', "base_url": 'https://fuaz.edu.ng'},
@@ -233,7 +233,7 @@ NIGERIAN_INSTITUTIONS_SEED = [
     {"name": 'Olabisi Onabanjo University', "short_code": 'OOU', "institution_type": 'State University', "base_url": 'https://oouagoiwoye.edu.ng'},
     {"name": 'Ondo State University of Science and Technology', "short_code": 'OAUSTECH', "institution_type": 'State University', "base_url": 'https://oaustech.edu.ng'},
     {"name": 'Osu State University (PLASU)', "short_code": 'PLASU', "institution_type": 'State University', "base_url": 'https://plasu.edu.ng'},
-    {"name": 'Rivers State University', "short_code": 'RSU', "institution_type": 'State University', "base_url": 'https://rsu.edu.ng'},
+    {"name": 'Rivers State University', "short_code": 'RSU', "institution_type": 'State University', "base_url": 'https://www.rsu.edu.ng'},
     {"name": 'Sokoto State University', "short_code": 'SSU', "institution_type": 'State University', "base_url": 'https://ssu.edu.ng'},
     {"name": 'Taraba State University', "short_code": 'TSU', "institution_type": 'State University', "base_url": 'https://tsuniversity.edu.ng'},
     {"name": 'Yobe State University', "short_code": 'YSU', "institution_type": 'State University', "base_url": 'https://ysu.edu.ng'},
@@ -275,7 +275,7 @@ NIGERIAN_INSTITUTIONS_SEED = [
     {"name": 'Pan-Atlantic University', "short_code": 'PAU', "institution_type": 'Private University', "base_url": 'https://pau.edu.ng'},
     {"name": 'American University of Nigeria', "short_code": 'AUN', "institution_type": 'Private University', "base_url": 'https://aun.edu.ng'},
     {"name": 'Ajayi Crowther University', "short_code": 'ACU', "institution_type": 'Private University', "base_url": 'https://acu.edu.ng'},
-    {"name": 'Al-Hikmah University', "short_code": 'ALHIKMAH', "institution_type": 'Private University', "base_url": 'https://alhikmah.edu.ng'},
+    {"name": 'Al-Hikmah University', "short_code": 'ALHIKMAH', "institution_type": 'Private University', "base_url": 'https://www.alhikmah.edu.ng'},
     {"name": 'Al-Qalam University', "short_code": 'ALQALAM', "institution_type": 'Private University', "base_url": 'https://auk.edu.ng'},
     {"name": 'Bells University of Technology', "short_code": 'BELLS', "institution_type": 'Private University', "base_url": 'https://bellsuniversity.edu.ng'},
     {"name": 'Bingham University', "short_code": 'BINGHAM', "institution_type": 'Private University', "base_url": 'https://binghamuni.edu.ng'},
@@ -686,6 +686,46 @@ def determine_priority(category: str) -> str:
         return "medium"
     return "normal"
 
+
+
+
+
+# ==================== Session Year Filter ====================
+
+import re as _re_session
+
+_SESSION_CURRENT = [
+    _re_session.compile(r'2026\s*[/\-]\s*2027'),
+    _re_session.compile(r'2026[/\-]2027'),
+]
+
+_SESSION_OLD = [
+    _re_session.compile(r'2025\s*[/\-]\s*2026'),
+    _re_session.compile(r'2025[/\-]2026'),
+    _re_session.compile(r'2024\s*[/\-]\s*2025'),
+    _re_session.compile(r'2024[/\-]2025'),
+    _re_session.compile(r'2023\s*[/\-]\s*2024'),
+    _re_session.compile(r'2023[/\-]2024'),
+]
+
+
+def classify_session(text: str) -> str:
+    """Return 'current' (2026/2027), 'old' (2025/2026 or older), or 'unknown'."""
+    if not text:
+        return "unknown"
+    lower = text.lower()
+
+    for pat in _SESSION_CURRENT:
+        if pat.search(lower):
+            return "current"
+
+    for pat in _SESSION_OLD:
+        if pat.search(lower):
+            return "old"
+
+    return "unknown"
+
+
 def submit_scraped_item_to_backend(university_id, title, source_url, summary=None, attachment_url=None):
     category = classify_announcement_category(title)
     slug_hash = hashlib.sha256(f"{university_id}-{title.strip().lower()}".encode()).hexdigest()
@@ -705,6 +745,13 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
             pdf_text = parse_pdf_attachment(attachment_url)
 
         # Extract hero image (only for new items)
+        # SESSION_YEAR_FILTER_V1 — skip old sessions, prefer current
+        combined_text = f"{title} {summary or ''}"
+        session = classify_session(combined_text)
+        if session == "old":
+            logger.info(f"⏭️  Skipping (old session): {title[:50]}")
+            return
+
         # STRICT_DATE_CHECK_V2 — require a real publication date
         pub_date = extract_date_from_page(source_url) if source_url else None
 
