@@ -54,7 +54,12 @@ logger = logging.getLogger("scuttle_engine")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/scuttle_db")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-engine = create_engine(DATABASE_URL)
+# ENGINE_STATEMENT_TIMEOUT — never block forever on locks
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"options": "-c statement_timeout=30000"},  # 30s max per query
+    pool_pre_ping=True,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -1405,59 +1410,81 @@ def get_db():
 
 @app.on_event("startup")
 def startup_event():
-    Base.metadata.create_all(bind=engine)
+    """STARTUP_ASYNC_V1 — bind port immediately, heavy init in background thread."""
+    import threading as _threading
 
-    # STARTUP_IMPORT_TEST
+    # 1. Ensure tables exist (fast, needed for other endpoints)
     try:
-        from app.services.firebase_sync import init_firebase
-        from app.services.push_service import notify_users_about_announcement
-        logger.info("✅ app.services imports work in main process")
+        Base.metadata.create_all(bind=engine)
     except Exception as e:
-        logger.error(f"❌ app.services import failed: {e}")
+        logger.warning(f"create_all warning: {e}")
 
-    # AUTO_MIGRATE_V1
-    try:
-        from sqlalchemy import text as _text
-        with engine.connect() as conn:
-            for col, typ in [
-                ("scrape_interval_minutes", "VARCHAR(20) DEFAULT '360'"),
-                ("last_scraped_at", "TIMESTAMP"),
-                ("last_scrape_status", "VARCHAR(20) DEFAULT 'unknown'"),
-                ("last_scrape_error", "TEXT"),
-                ("consecutive_failures", "VARCHAR(10) DEFAULT '0'"),
-            ]:
-                try:
-                    conn.execute(_text(f"ALTER TABLE universities ADD COLUMN IF NOT EXISTS {col} {typ}"))
-                except Exception:
-                    pass
-            for col, typ in [
-                ("priority", "VARCHAR(20) DEFAULT 'normal'"),
-                ("image_url", "TEXT"),
-            ]:
-                try:
-                    conn.execute(_text(f"ALTER TABLE announcements ADD COLUMN IF NOT EXISTS {col} {typ}"))
-                except Exception:
-                    pass
-            conn.commit()
-            logger.info("✅ Auto-migration complete")
-    except Exception as mig_err:
-        logger.warning(f"Auto-migration skipped: {mig_err}")
-    db = SessionLocal()
-    try:
-        for u in NIGERIAN_INSTITUTIONS_SEED:
-            if not db.query(UniversityModel).filter(UniversityModel.short_code == u["short_code"]).first():
-                db.add(UniversityModel(
-                    name=u["name"], short_code=u["short_code"],
-                    institution_type=u["institution_type"],
-                    base_url=u["base_url"], is_active=True,
-                ))
-        db.commit()
-        logger.info("Seeded institutions successfully.")
-    except Exception as e:
-        logger.error(f"Seed error: {e}")
-    finally:
-        db.close()
+    # 2. Start heavy init in a daemon thread so Uvicorn can bind port NOW
+    def _background_init():
+        import time as _t
+        _t.sleep(3)  # let Uvicorn bind port first
 
+        # 2a. Migration
+        try:
+            from sqlalchemy import text as _text
+            with engine.connect() as conn:
+                conn.execute(_text("SET statement_timeout = '10s'"))
+                migrations = [
+                    ("universities", "scrape_interval_minutes", "VARCHAR(20) DEFAULT '360'"),
+                    ("universities", "last_scraped_at", "TIMESTAMP"),
+                    ("universities", "last_scrape_status", "VARCHAR(20) DEFAULT 'unknown'"),
+                    ("universities", "last_scrape_error", "TEXT"),
+                    ("universities", "consecutive_failures", "VARCHAR(10) DEFAULT '0'"),
+                    ("announcements", "priority", "VARCHAR(20) DEFAULT 'normal'"),
+                    ("announcements", "image_url", "TEXT"),
+                ]
+                for table, col, typ in migrations:
+                    try:
+                        conn.execute(_text(
+                            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typ}"
+                        ))
+                    except Exception as col_err:
+                        logger.debug(f"Migration skipped {table}.{col}: {col_err}")
+                conn.commit()
+                logger.info("✅ Auto-migration complete (background)")
+        except Exception as mig_err:
+            logger.warning(f"Migration failed: {mig_err}")
+
+        # 2b. Seed universities
+        try:
+            db = SessionLocal()
+            try:
+                added = 0
+                for u in NIGERIAN_INSTITUTIONS_SEED:
+                    existing = db.query(UniversityModel).filter(
+                        UniversityModel.short_code == u["short_code"]
+                    ).first()
+                    if not existing:
+                        db.add(UniversityModel(
+                            name=u["name"],
+                            short_code=u["short_code"],
+                            institution_type=u["institution_type"],
+                            base_url=u["base_url"],
+                            is_active=True,
+                        ))
+                        added += 1
+                db.commit()
+                logger.info(f"✅ Seeded {added} new universities (total in seed: {len(NIGERIAN_INSTITUTIONS_SEED)})")
+            finally:
+                db.close()
+        except Exception as seed_err:
+            logger.error(f"Seed failed: {seed_err}")
+
+        # 2c. Test imports
+        try:
+            from app.services.firebase_sync import init_firebase  # noqa
+            from app.services.push_service import notify_users_about_announcement  # noqa
+            logger.info("✅ app.services imports work in main process")
+        except Exception as imp_err:
+            logger.error(f"❌ app.services import failed: {imp_err}")
+
+    _threading.Thread(target=_background_init, daemon=True).start()
+    logger.info("✅ Uvicorn can bind port now — heavy init running in background")
 
 @app.get("/api/v1/universities", response_model=List[UniversityResponse], tags=["Institutions"])
 def list_universities(skip: int = 0, limit: int = 250, db: Session = Depends(get_db)):
