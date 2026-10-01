@@ -65,7 +65,7 @@ export default function Header() {
             className="hidden sm:flex group bg-apple-blue hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 shadow-sm items-center gap-1.5 hover:-translate-y-0.5 hover:scale-[1.03]"
           >
             <MessageCircle size={16} />
-            <span>Join</span>
+            <span className="hidden sm:inline">Join</span><span className="sm:hidden">Join</span>
             <ArrowRight size={14} className="transition-transform duration-300 group-hover:translate-x-0.5" />
           </a>
 
@@ -89,7 +89,7 @@ export default function Header() {
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-modal border border-gray-100 py-2 overflow-hidden">
+                <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-white rounded-2xl shadow-modal border border-gray-100 py-2 overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-100">
                     <p className="text-sm font-semibold truncate">{profile?.name || 'User'}</p>
                     <p className="text-xs text-apple-gray truncate">{user.email}</p>

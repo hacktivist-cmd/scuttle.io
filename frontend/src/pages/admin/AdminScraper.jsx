@@ -22,13 +22,13 @@ export default function AdminScraper() {
   }
 
   return (
-    <div className="p-8 max-w-4xl">
-      <h1 className="text-3xl font-semibold tracking-tight mb-1">Scraper Control</h1>
+    <div className="p-4 sm:p-6 md:p-8 max-w-4xl">
+      <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight mb-1">Scraper Control</h1>
       <p className="text-apple-gray text-sm mb-8">
         Manually trigger the scraper to check all institutions for new announcements.
       </p>
 
-      <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-apple">
+      <div className="bg-white rounded-2xl p-5 sm:p-6 md:p-8 border border-gray-100 shadow-apple">
         <div className="flex items-start gap-5 mb-6">
           <div className="w-14 h-14 rounded-2xl bg-purple-50 flex items-center justify-center flex-shrink-0">
             <Zap size={24} className="text-purple-600" />

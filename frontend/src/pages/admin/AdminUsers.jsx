@@ -27,9 +27,7 @@ export default function AdminUsers() {
     const q = search.toLowerCase()
     return users.filter((u) => {
       const matchesSearch =
-        !q ||
-        u.name?.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q)
+        !q || u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
       const matchesFilter =
         filter === 'ALL' ||
         (filter === 'ADMIN' && u.isAdmin) ||
@@ -39,16 +37,16 @@ export default function AdminUsers() {
   }, [users, search, filter])
 
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight mb-1">Users</h1>
+    <div className="p-4 sm:p-6 md:p-8 max-w-6xl">
+      <div className="mb-6 md:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight mb-1">Users</h1>
         <p className="text-apple-gray text-sm">
-          {users.length} total users · {users.filter((u) => u.newsletterEnabled).length} subscribed to newsletter
+          {users.length} total · {users.filter((u) => u.newsletterEnabled).length} subscribed
         </p>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-apple overflow-hidden">
-        <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row gap-3 items-center">
+        <div className="p-4 md:p-5 border-b border-gray-100 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1 w-full">
             <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-apple-gray pointer-events-none" />
             <input
@@ -80,77 +78,137 @@ export default function AdminUsers() {
             <p className="text-sm">No users found.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50/50 border-b border-gray-100">
-                <tr className="text-left text-[11px] uppercase tracking-wider text-apple-gray font-semibold">
-                  <th className="px-6 py-3">User</th>
-                  <th className="px-6 py-3">Interests</th>
-                  <th className="px-6 py-3">Newsletter</th>
-                  <th className="px-6 py-3">Joined</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filtered.map((u) => (
-                  <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                          {(u.name || u.email)?.[0]?.toUpperCase() || 'U'}
+          <>
+            {/* Mobile card view */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {filtered.map((u) => (
+                <div key={u.id} className="p-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                      {(u.name || u.email)?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold truncate">{u.name || 'Unnamed'}</p>
+                        {u.isAdmin && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded flex-shrink-0">
+                            <Shield size={9} /> ADMIN
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-apple-gray truncate flex items-center gap-1 mt-0.5">
+                        <Mail size={11} /> {u.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {u.interests?.length > 0 ? (
+                      u.interests.slice(0, 3).map((i) => (
+                        <span key={i} className="text-[10px] bg-blue-50 text-apple-blue px-2 py-0.5 rounded-md">
+                          {i}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-[10px] text-apple-gray">No interests set</span>
+                    )}
+                    {u.interests?.length > 3 && (
+                      <span className="text-[10px] text-apple-gray">+{u.interests.length - 3}</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    {u.newsletterEnabled ? (
+                      <span className="inline-flex items-center gap-1.5 text-green-700 font-medium">
+                        <CheckCircle2 size={14} /> Subscribed
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-apple-gray">
+                        <XCircle size={14} /> Not subscribed
+                      </span>
+                    )}
+                    <span className="text-apple-gray flex items-center gap-1.5">
+                      <Calendar size={12} />
+                      {u.createdAt?.toDate?.().toLocaleDateString() || 'Unknown'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table view */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50/50 border-b border-gray-100">
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-apple-gray font-semibold">
+                    <th className="px-6 py-3">User</th>
+                    <th className="px-6 py-3">Interests</th>
+                    <th className="px-6 py-3">Newsletter</th>
+                    <th className="px-6 py-3">Joined</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filtered.map((u) => (
+                    <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                            {(u.name || u.email)?.[0]?.toUpperCase() || 'U'}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium truncate">{u.name || 'Unnamed'}</p>
+                              {u.isAdmin && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
+                                  <Shield size={9} /> ADMIN
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-apple-gray truncate flex items-center gap-1">
+                              <Mail size={11} /> {u.email}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium truncate">{u.name || 'Unnamed'}</p>
-                            {u.isAdmin && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
-                                <Shield size={9} /> ADMIN
+                      </td>
+                      <td className="px-6 py-4">
+                        {u.interests?.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {u.interests.slice(0, 3).map((i) => (
+                              <span key={i} className="text-[10px] bg-blue-50 text-apple-blue px-2 py-0.5 rounded-md">
+                                {i}
                               </span>
+                            ))}
+                            {u.interests.length > 3 && (
+                              <span className="text-[10px] text-apple-gray">+{u.interests.length - 3}</span>
                             )}
                           </div>
-                          <p className="text-xs text-apple-gray truncate flex items-center gap-1">
-                            <Mail size={11} /> {u.email}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {u.interests?.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {u.interests.slice(0, 3).map((i) => (
-                            <span key={i} className="text-[10px] bg-blue-50 text-apple-blue px-2 py-0.5 rounded-md">
-                              {i}
-                            </span>
-                          ))}
-                          {u.interests.length > 3 && (
-                            <span className="text-[10px] text-apple-gray">+{u.interests.length - 3}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-apple-gray">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {u.newsletterEnabled ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700">
-                          <CheckCircle2 size={14} /> Subscribed
+                        ) : (
+                          <span className="text-xs text-apple-gray">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {u.newsletterEnabled ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700">
+                            <CheckCircle2 size={14} /> Subscribed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-apple-gray">
+                            <XCircle size={14} /> Not subscribed
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-xs text-apple-gray flex items-center gap-1.5">
+                          <Calendar size={12} />
+                          {u.createdAt?.toDate?.().toLocaleDateString() || 'Unknown'}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-apple-gray">
-                          <XCircle size={14} /> Not subscribed
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-xs text-apple-gray flex items-center gap-1.5">
-                        <Calendar size={12} />
-                        {u.createdAt?.toDate?.().toLocaleDateString() || 'Unknown'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

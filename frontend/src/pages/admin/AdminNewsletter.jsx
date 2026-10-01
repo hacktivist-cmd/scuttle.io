@@ -62,15 +62,15 @@ export default function AdminNewsletter() {
   }
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 sm:p-6 md:p-8 max-w-6xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight mb-1">Newsletter</h1>
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight mb-1">Newsletter</h1>
         <p className="text-apple-gray text-sm">
           Broadcast updates to your subscribers. They'll receive it via email until they unsubscribe.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Subscriber count card */}
         <div className="lg:col-span-1 space-y-5">
           <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-apple">
