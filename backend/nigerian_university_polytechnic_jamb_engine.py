@@ -2138,6 +2138,63 @@ def trigger_force_scrape():
     return {"status": "queued", "message": "Force-scrape dispatched for all universities"}
 
 
+
+
+# ==================== Async Sync Task ====================
+
+@celery_app.task(name="main.sync_firestore_async")
+def sync_firestore_async():
+    """Background task to sync PostgreSQL → Firestore."""
+    from app.services.firebase_sync import push_announcement
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(AnnouncementModel, UniversityModel)
+            .join(UniversityModel, AnnouncementModel.university_id == UniversityModel.id)
+            .order_by(AnnouncementModel.date_scraped.desc())
+            .all()
+        )
+
+        logger.info(f"🔄 Sync task started: {len(rows)} announcements")
+        ok, failed = 0, 0
+        for i, (ann, uni) in enumerate(rows, 1):
+            success = push_announcement({
+                "slug_hash": ann.slug_hash,
+                "university_name": uni.name,
+                "institution_type": uni.institution_type,
+                "category": ann.category,
+                "title": ann.title,
+                "summary": ann.summary or "",
+                "source_url": ann.source_url,
+                "pdf_extracted_text": ann.pdf_extracted_text,
+                "date_scraped": ann.date_scraped.isoformat() if ann.date_scraped else datetime.utcnow().isoformat(),
+                "priority": ann.priority or "normal",
+                "university_code": uni.short_code,
+                "image_url": getattr(ann, "image_url", "") or "",
+            })
+            if success:
+                ok += 1
+            else:
+                failed += 1
+            if i % 20 == 0:
+                logger.info(f"  Progress: {i}/{len(rows)} ({ok} synced)")
+
+        logger.info(f"✅ Sync complete: {ok} synced, {failed} failed")
+        return {"synced": ok, "failed": failed, "total": len(rows)}
+    finally:
+        db.close()
+
+
+
+
+@app.post("/api/v1/admin/sync-firestore-async", tags=["Admin"])
+def sync_firestore_async_http():
+    """Trigger the sync in background via Celery."""
+    sync_firestore_async.delay()
+    return {"status": "queued", "message": "Sync task dispatched to Celery"}
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {
