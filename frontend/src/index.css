@@ -29,3 +29,31 @@ body {
   -webkit-text-fill-color: transparent;
   animation: shimmer 3s linear infinite;
 }
+
+
+/* IOS_FALLBACKS — graceful degradation for older iOS Safari */
+@supports not (backdrop-filter: blur(12px)) {
+  .backdrop-blur-xl,
+  .backdrop-blur-md,
+  .backdrop-blur-sm,
+  .backdrop-blur-lg {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+  }
+}
+
+@supports not (background: linear-gradient(to right, red, blue)) {
+  .bg-gradient-to-br,
+  .bg-gradient-to-r,
+  .bg-gradient-to-t {
+    background-color: #0071E3 !important;
+  }
+}
+
+/* Prevent iOS auto-zoom on inputs */
+@media screen and (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
