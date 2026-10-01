@@ -749,7 +749,7 @@ COMMON_NEWS_PATHS = [
 
 
 def scrape_multipath_institution(uni_id: str, base_url: str, uni_name: str) -> int:
-    """Try multiple common paths to find news/announcements. Returns count of new items."""
+    """Try sitemap + WP API + HTML fallbacks. Returns count of new items."""
     from datetime import timedelta as _td
     import time as _time
 
@@ -761,7 +761,10 @@ def scrape_multipath_institution(uni_id: str, base_url: str, uni_name: str) -> i
     finally:
         db.close()
 
-    # Try WP API first
+    # SITEMAP_WIRED — try sitemap first (works for JS-rendered sites)
+    scrape_sitemap_institution(uni_id, base_url, uni_name)
+
+    # Try WP API
     ok = scrape_wordpress_institution(uni_id, base_url, uni_name)
     if not ok:
         # Try HTML on homepage
@@ -804,6 +807,147 @@ def scrape_multipath_institution(uni_id: str, base_url: str, uni_name: str) -> i
         return after_count - before_count
     finally:
         db.close()
+
+
+
+
+
+# ==================== Sitemap Scraper ====================
+
+def scrape_sitemap_institution(uni_id: str, base_url: str, uni_name: str) -> int:
+    """
+    Crawl sitemap.xml for URLs. Works even on JS-rendered sites.
+    Returns number of new announcements added.
+    """
+    import re as _re_sm
+    import time as _time
+
+    base = base_url.rstrip("/")
+    sitemap_urls = [
+        f"{base}/sitemap.xml",
+        f"{base}/sitemap_index.xml",
+        f"{base}/sitemap-post.xml",
+        f"{base}/wp-sitemap.xml",
+        f"{base}/post-sitemap.xml",
+        f"{base}/news-sitemap.xml",
+        f"{base}/sitemap-1.xml",
+    ]
+
+    headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
+    all_urls = []
+
+    # Try each sitemap URL
+    for sm_url in sitemap_urls:
+        try:
+            r = requests.get(sm_url, headers=headers, timeout=5)
+            if r.status_code == 200 and ("<urlset" in r.text or "<sitemapindex" in r.text):
+                # Extract all <loc> tags
+                locs = _re_sm.findall(r"<loc>([^<]+)</loc>", r.text)
+                all_urls.extend(locs)
+
+                # If it's a sitemap index, follow the first level
+                if "<sitemapindex" in r.text and len(locs) < 50:
+                    for nested_url in locs[:5]:
+                        try:
+                            nr = requests.get(nested_url, headers=headers, timeout=5)
+                            if nr.status_code == 200:
+                                nested_locs = _re_sm.findall(r"<loc>([^<]+)</loc>", nr.text)
+                                all_urls.extend(nested_locs)
+                        except Exception:
+                            continue
+
+                if all_urls:
+                    logger.info(f"  📄 {uni_name}: found {len(all_urls)} URLs in sitemap")
+                    break
+        except Exception:
+            continue
+
+    if not all_urls:
+        logger.debug(f"  No sitemap for {uni_name}")
+        return 0
+
+    # Filter URLs that look like announcements
+    keywords = [
+        "admission", "post-utme", "post_utme", "screening", "merit", "fees",
+        "calendar", "notice", "news", "announcement", "update", "registrar",
+        "2026", "2027", "press", "release",
+    ]
+    # Filter out obviously non-news URLs
+    exclude = [
+        "wp-content", "wp-includes", "feed", "comment", "category",
+        "tag", "author", "page_id", "attachment", "?replytocom",
+    ]
+
+    added = 0
+    for url in all_urls[:80]:  # Cap at 80 URLs per uni
+        url_lower = url.lower()
+
+        # Skip excluded URLs
+        if any(ex in url_lower for ex in exclude):
+            continue
+
+        # Require at least one keyword match
+        if not any(kw in url_lower for kw in keywords):
+            continue
+
+        # Fetch this URL to get its title
+        try:
+            r = requests.get(url, headers=headers, timeout=5)
+            if r.status_code != 200:
+                continue
+
+            soup = BeautifulSoup(r.text, "html.parser")
+
+            # Get title
+            title_tag = soup.find("title")
+            if title_tag and title_tag.string:
+                title = title_tag.string.strip()
+                # Clean up " | Site Name" suffixes
+                title = _re_sm.split(r"\s*[\|\-–]\s*(Maduka|University|Home|Homepage)", title)[0].strip()
+            else:
+                # Fallback: use the URL slug
+                slug = url.rstrip("/").split("/")[-1]
+                title = slug.replace("-", " ").replace("_", " ").title()
+
+            if len(title) < 15:
+                continue
+
+            # Try to get og:description or meta description as summary
+            summary = ""
+            for meta_name in ["description", "og:description"]:
+                meta = soup.find("meta", attrs={"name": meta_name}) or soup.find("meta", attrs={"property": meta_name})
+                if meta and meta.get("content"):
+                    summary = meta["content"][:300]
+                    break
+
+            # Check if this URL is already in DB before counting
+            slug_hash = hashlib.sha256(
+                f"{uni_id}-{title.strip().lower()}".encode()
+            ).hexdigest()
+
+            db = SessionLocal()
+            try:
+                exists = db.query(AnnouncementModel).filter(
+                    AnnouncementModel.slug_hash == slug_hash
+                ).first()
+                if exists:
+                    continue
+            finally:
+                db.close()
+
+            submit_scraped_item_to_backend(
+                university_id=uni_id,
+                title=title,
+                source_url=url,
+                summary=summary or f"Discovered via sitemap for {uni_name}",
+            )
+            added += 1
+            _time.sleep(0.1)
+        except Exception as e:
+            logger.debug(f"  Sitemap item failed: {url[:60]} → {str(e)[:40]}")
+            continue
+
+    return added
 
 
 
@@ -1790,6 +1934,7 @@ def scrape_all_force():
 
                 # Update tracking
                 inst.last_scraped_at = datetime.utcnow()
+                # EMPTY_VS_FAILED — mark JS-required sites distinctly
                 if new_items > 0:
                     inst.last_scrape_status = "ok"
                     inst.last_scrape_error = None
