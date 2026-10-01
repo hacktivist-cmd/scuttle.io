@@ -107,6 +107,9 @@ class UniversityResponse(BaseModel):
 class AnnouncementResponse(BaseModel):
     id: uuid.UUID
     university_id: uuid.UUID
+    university_name: Optional[str] = None
+    institution_type: Optional[str] = None
+    university_code: Optional[str] = None
     category: str
     title: str
     summary: Optional[str] = None
