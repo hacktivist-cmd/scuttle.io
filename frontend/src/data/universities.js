@@ -242,7 +242,7 @@ export const universitiesData = [
   { name: 'Rayhaan University', code: 'RAYHAAN', type: 'Private University', url: 'https://rayhaan.edu.ng' },
   { name: 'Sam Maris University', code: 'SAMMARIS', type: 'Private University', url: 'https://sammaris.edu.ng' },
   { name: 'Lux Mundi University', code: 'LUXMUNDI', type: 'Private University', url: 'https://luxmundi.edu.ng' },
-  { name: 'Maduka University', code: 'MADUKA', type: 'Private University', url: 'https://maduka.edu.ng' },
+  { name: 'Maduka University', code: 'MADUKA', type: 'Private University', url: 'https://madukauniversity.edu.ng' },
   { name: 'PeaceLand University', code: 'PEACELAND', type: 'Private University', url: 'https://peaceland.edu.ng' },
   { name: 'Amadeus University', code: 'AMADEUS', type: 'Private University', url: 'https://amadeus.edu.ng' },
   { name: 'Vision University', code: 'VISION', type: 'Private University', url: 'https://vision.edu.ng' },
