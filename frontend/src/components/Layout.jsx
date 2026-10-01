@@ -3,6 +3,7 @@ import Header from './Header'
 import Footer from './Footer'
 import ScrollProgressBar from './ScrollProgressBar'
 import ScrollTopButton from './ScrollTopButton'
+import InstallPrompt from './InstallPrompt'
 
 export default function Layout() {
   return (
@@ -14,6 +15,7 @@ export default function Layout() {
       </main>
       <Footer />
       <ScrollTopButton />
+      <InstallPrompt />
     </div>
   )
 }

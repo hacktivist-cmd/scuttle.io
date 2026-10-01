@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import UniversityLogo from './UniversityLogo'
 import { matchUniversity } from '../lib/matchUniversity'
+import ShareButtons from './ShareButtons'
 
 export default function AnnouncementModal({ item, onClose }) {
   const { markRead } = useReadTracking()
@@ -143,10 +144,13 @@ export default function AnnouncementModal({ item, onClose }) {
             </div>
 
             <div className="p-6 md:p-8 border-t border-gray-100 bg-white flex flex-col sm:flex-row justify-between items-center gap-4">
-              <span className="text-xs text-apple-gray font-medium flex items-center gap-1.5">
-                <Calendar size={12} />
-                Scraped: {new Date(item.date_scraped).toLocaleDateString()}
-              </span>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <ShareButtons item={item} />
+                <span className="text-xs text-apple-gray font-medium flex items-center gap-1.5">
+                  <Calendar size={12} />
+                  {new Date(item.date_scraped).toLocaleDateString()}
+                </span>
+              </div>
               <a
                 href={item.source_url}
                 target="_blank"

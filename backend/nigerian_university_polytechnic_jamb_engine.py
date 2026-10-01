@@ -561,6 +561,23 @@ def send_newsletter(payload: _NewsletterPayload):
     }
 
 
+
+
+# ==================== OG Image Endpoint ====================
+
+from fastapi.responses import Response as _Response
+
+@app.get("/api/v1/og", tags=["SEO"])
+def og_image(
+    title: str = Query(..., max_length=200),
+    university: str = Query("", max_length=100),
+    category: str = Query("General News", max_length=50),
+):
+    """Generate a dynamic OG image for share previews."""
+    from app.services.og_image import make_og_response
+    return make_og_response(title, university, category)
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {
