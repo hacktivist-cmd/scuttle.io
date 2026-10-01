@@ -27,6 +27,11 @@ messaging.onBackgroundMessage((payload) => {
     vibrate: [200, 100, 200],
     tag: 'scuttle-notification',
   })
+
+  // BADGE — increment app icon badge when push arrives in background
+  if (self.navigator && 'setAppBadge' in self.navigator) {
+    self.navigator.setAppBadge().catch(() => {})
+  }
 })
 
 // Handle notification click — open the URL

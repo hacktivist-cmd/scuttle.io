@@ -9,6 +9,7 @@ import {
   enablePushNotifications,
   onForegroundMessage,
 } from '../lib/pushNotifications'
+import { incrementBadge } from '../lib/badge'
 
 export default function NotificationPrompt() {
   const { user, profile, refreshProfile } = useAuth()
@@ -43,6 +44,7 @@ export default function NotificationPrompt() {
     if (!profile?.pushEnabled) return
     const unsubscribe = onForegroundMessage((msg) => {
       setForegroundToast(msg)
+      incrementBadge()  // BADGE — show red dot on app icon
       setTimeout(() => setForegroundToast(null), 5000)
     })
     return () => unsubscribe?.()
