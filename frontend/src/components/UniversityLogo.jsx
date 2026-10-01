@@ -1,11 +1,9 @@
 import { useState } from 'react'
 
 /**
- * Renders a university's logo with a 3-tier fallback chain:
- *   1. Clearbit (highest quality)
- *   2. Google favicons (very fast)
- *   3. Direct favicon.ico from the site
- *   4. Letter avatar (last resort)
+ * University logo with smart fallback chain.
+ * Skips Clearbit for .edu.ng (they never have Nigerian uni logos) and
+ * jumps straight to Google favicons → direct favicon → letter avatar.
  */
 export default function UniversityLogo({
   university,
@@ -34,9 +32,12 @@ export default function UniversityLogo({
     .charAt(0)
     .toUpperCase()
 
+  // Skip Clearbit for .edu.ng — they never have these
+  const skipClearbit = domain.endsWith('.edu.ng') || domain.endsWith('.edu')
+
   const SOURCES = domain
     ? [
-        `https://logo.clearbit.com/${domain}`,
+        ...(skipClearbit ? [] : [`https://logo.clearbit.com/${domain}`]),
         `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
         `https://${domain}/favicon.ico`,
       ]
