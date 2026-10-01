@@ -635,6 +635,60 @@ def get_stats(db: Session = Depends(get_db)):
     }
 
 
+
+
+# ==================== Admin Sync Endpoint ====================
+
+@app.post("/api/v1/admin/sync-firestore", tags=["Admin"])
+def sync_firestore(limit: int = 500):
+    """Backfill all PostgreSQL announcements to Firestore (one-time + on-demand)."""
+    from app.services.firebase_sync import push_announcement
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(AnnouncementModel, UniversityModel)
+            .join(UniversityModel, AnnouncementModel.university_id == UniversityModel.id)
+            .order_by(AnnouncementModel.date_scraped.desc())
+            .limit(limit)
+            .all()
+        )
+
+        ok, failed = 0, 0
+        for ann, uni in rows:
+            success = push_announcement({
+                "slug_hash": ann.slug_hash,
+                "university_name": uni.name,
+                "institution_type": uni.institution_type,
+                "category": ann.category,
+                "title": ann.title,
+                "summary": ann.summary or "",
+                "source_url": ann.source_url,
+                "pdf_extracted_text": ann.pdf_extracted_text,
+                "date_scraped": ann.date_scraped.isoformat() if ann.date_scraped else datetime.utcnow().isoformat(),
+                "priority": ann.priority or "normal",
+                "university_code": uni.short_code,
+                "image_url": getattr(ann, "image_url", "") or "",
+            })
+            if success:
+                ok += 1
+            else:
+                failed += 1
+
+        logger.info(f"🔄 Firestore sync: {ok} pushed, {failed} failed")
+        return {
+            "status": "complete",
+            "synced": ok,
+            "failed": failed,
+            "total": len(rows),
+        }
+    except Exception as e:
+        logger.error(f"Sync failed: {e}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {

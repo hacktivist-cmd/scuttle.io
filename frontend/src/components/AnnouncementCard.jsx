@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import ForYouBadge from './ForYouBadge'
 import UniversityLogo from './UniversityLogo'
 import { matchUniversity } from '../lib/matchUniversity'
+import { timeAgo } from '../lib/timeAgo'
 
 export default function AnnouncementCard({ item, index, onClick, forYouReasons = [] }) {
   const { isRead } = useReadTracking()
@@ -48,9 +49,14 @@ export default function AnnouncementCard({ item, index, onClick, forYouReasons =
           <span className="bg-blue-50 text-apple-blue text-[11px] font-semibold px-3 py-1 rounded-full border border-blue-100 uppercase tracking-wide transition-transform duration-300 group-hover:scale-105">
             {item.institution_type || 'University'}
           </span>
-          <span className="bg-gray-50 text-apple-gray text-[11px] font-medium px-3 py-1 rounded-full border border-gray-100 mr-16">
-            {item.category}
-          </span>
+          <div className="flex items-center gap-1.5 mr-16">
+            <span className="text-[10px] text-apple-gray font-medium">
+              {timeAgo(item.date_scraped)}
+            </span>
+            <span className="bg-gray-50 text-apple-gray text-[11px] font-medium px-3 py-1 rounded-full border border-gray-100">
+              {item.category}
+            </span>
+          </div>
         </div>
 
         <h3 className={`font-semibold text-lg leading-snug transition-colors duration-300 group-hover:text-apple-blue ${read ? 'text-apple-gray' : 'text-apple-dark'}`}>
