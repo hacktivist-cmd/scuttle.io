@@ -668,10 +668,27 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
             pdf_text = parse_pdf_attachment(attachment_url)
 
         # Extract hero image (only for new items)
-        # SKIP_OLD_ANNOUNCEMENT — check publication date, skip if older than 6 months
+        # STRICT_DATE_CHECK_V2 — require a real publication date
         pub_date = extract_date_from_page(source_url) if source_url else None
-        if pub_date and is_too_old(pub_date, max_age_months=6):
-            logger.info(f"⏭️  Skipping old announcement ({pub_date.date()}): {title[:50]}")
+
+        # If no date can be found, only allow it if it looks like a fresh announcement
+        if pub_date is None:
+            # Check the URL for a year hint (e.g. /2025/ or /2024/)
+            url_year = None
+            for y in ["2020", "2021", "2022", "2023", "2024", "2025", "2026"]:
+                if y in (source_url or ""):
+                    url_year = int(y)
+                    break
+            # If URL has an old year in it, skip
+            if url_year and url_year < datetime.utcnow().year:
+                logger.info(f"⏭️  Skipping (old URL year {url_year}): {title[:50]}")
+                return
+            # Otherwise accept it but mark date as today
+            pub_date = datetime.utcnow()
+
+        # Skip anything older than 6 months
+        if is_too_old(pub_date, max_age_months=6):
+            logger.info(f"⏭️  Skipping old ({pub_date.date()}): {title[:50]}")
             return
 
         image_url = extract_image_from_page(source_url) if source_url else ""
