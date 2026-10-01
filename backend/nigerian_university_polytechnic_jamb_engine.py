@@ -761,6 +761,20 @@ def scrape_multipath_institution(uni_id: str, base_url: str, uni_name: str) -> i
     finally:
         db.close()
 
+    # SPA_WIRED — check if this uni has a known SPA config
+    db_check = SessionLocal()
+    try:
+        uni_check = db_check.query(UniversityModel).filter(UniversityModel.id == uni_id).first()
+        uni_code = uni_check.short_code if uni_check else ""
+    finally:
+        db_check.close()
+
+    if uni_code.upper() in SPA_CONFIGS:
+        added = scrape_spa_institution(uni_id, base_url, uni_name, uni_code)
+        if added > 0:
+            logger.info("  SPA scraper got " + str(added) + " items for " + uni_name)
+            return added
+
     # SITEMAP_WIRED — try sitemap first (works for JS-rendered sites)
     scrape_sitemap_institution(uni_id, base_url, uni_name)
 
@@ -951,7 +965,98 @@ def scrape_sitemap_institution(uni_id: str, base_url: str, uni_name: str) -> int
 
 
 
-def submit_scraped_item_to_backend(university_id, title, source_url, summary=None, attachment_url=None):
+
+# ==================== SPA (React/Vue) Scraper ====================
+
+SPA_CONFIGS = {
+    "MADUKA": {
+        "api_base": "https://api.cms.madukauniversity.edu.ng/api/v1",
+        "posts_path": "/post",
+        "post_url_template": "{base}/post/{id}",
+        "id_field": "_id",
+        "title_field": "title",
+        "content_field": "content",
+        "image_field": "image",
+        "date_field": "createdAt",
+    },
+}
+
+
+def scrape_spa_institution(uni_id, base_url, uni_name, short_code):
+    """Scrape a JS-rendered SPA by hitting its backend API directly."""
+    config = SPA_CONFIGS.get(short_code.upper())
+    if not config:
+        return 0
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 ScuttleBot/2.0",
+        "Accept": "application/json",
+    }
+    base_api = config["api_base"]
+    posts_path = config["posts_path"]
+    added = 0
+
+    for page in range(1, 4):
+        try:
+            r = requests.get(
+                base_api + posts_path + "?page=" + str(page) + "&limit=20",
+                headers=headers, timeout=10,
+            )
+            if r.status_code != 200:
+                break
+
+            payload = r.json()
+            data = payload.get("data", [])
+            if not data:
+                break
+
+            for item in data:
+                try:
+                    title = str(item.get(config["title_field"], "")).strip()
+                    if not title or len(title) < 10:
+                        continue
+
+                    content_html = str(item.get(config["content_field"], ""))
+                    content_soup = BeautifulSoup(content_html, "html.parser")
+                    content_text = content_soup.get_text(" ", strip=True)
+                    summary = content_text[:300]
+
+                    date_str = item.get(config["date_field"], "")
+                    pub_date = None
+                    if date_str:
+                        try:
+                            pub_date = datetime.fromisoformat(str(date_str).replace("Z", "+00:00"))
+                            pub_date = pub_date.replace(tzinfo=None)
+                        except Exception:
+                            pass
+
+                    post_id = item.get(config["id_field"], "")
+                    source_url = config["post_url_template"].format(
+                        base=base_url.rstrip("/"), id=post_id,
+                    )
+
+                    image_url = item.get(config["image_field"], "") or ""
+
+                    submit_scraped_item_to_backend(
+                        university_id=uni_id,
+                        title=title,
+                        source_url=source_url,
+                        summary=summary,
+                        image_url=image_url,
+                        date_published=pub_date,
+                    )
+                    added += 1
+                except Exception as e:
+                    logger.debug("SPA item failed: " + str(e))
+                    continue
+        except Exception as e:
+            logger.warning("SPA fetch failed page " + str(page) + ": " + str(e))
+            break
+
+    return added
+
+
+def submit_scraped_item_to_backend(university_id, title, source_url, summary=None, attachment_url=None, image_url=None, date_published=None):
     category = classify_announcement_category(title)
     slug_hash = hashlib.sha256(f"{university_id}-{title.strip().lower()}".encode()).hexdigest()
 
@@ -1000,7 +1105,8 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
             logger.info(f"⏭️  Skipping old ({pub_date.date()}): {title[:50]}")
             return
 
-        image_url = extract_image_from_page(source_url) if source_url else ""
+        if image_url is None:
+            image_url = extract_image_from_page(source_url) if source_url else ""
 
         new_ann = AnnouncementModel(
             university_id=university_id,
@@ -1014,7 +1120,7 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
             attachment_url=attachment_url,
             pdf_extracted_text=pdf_text,
             # SET_DATE_PUBLISHED — use detected date if available
-            date_published=pub_date if pub_date else datetime.utcnow(),
+            date_published=date_published if date_published else (pub_date if 'pub_date' in locals() and pub_date else datetime.utcnow()),
         )
         db.add(new_ann)
         db.commit()
