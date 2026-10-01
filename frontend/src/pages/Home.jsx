@@ -14,6 +14,7 @@ import { useAuthGate } from '../hooks/useAuthGate'
 import { usePersonalizedFeed } from '../hooks/usePersonalizedFeed'
 import { useSEO } from '../hooks/useSEO'
 import { useAuth } from '../contexts/AuthContext'
+import { TIME_FILTERS, isInTimeRange } from '../lib/timeFilters'
 
 const PAGE_SIZE = 9
 const HIGH_PRIORITY = ['Post-UTME', 'Admission List', 'JAMB CAPS']
