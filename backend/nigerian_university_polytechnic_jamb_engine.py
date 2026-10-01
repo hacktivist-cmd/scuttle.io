@@ -463,7 +463,7 @@ def list_universities(skip: int = 0, limit: int = 250, db: Session = Depends(get
     return db.query(UniversityModel).offset(skip).limit(limit).all()
 
 
-@app.get("/api/v1/announcements", response_model=List[AnnouncementResponse], tags=["Announcements"])
+@app.get("/api/v1/announcements", tags=["Announcements"])
 def list_announcements(
     university_id: Optional[uuid.UUID] = Query(None),
     category: Optional[str] = Query(None),
@@ -471,14 +471,37 @@ def list_announcements(
     skip: int = 0, limit: int = 50,
     db: Session = Depends(get_db),
 ):
-    q = db.query(AnnouncementModel)
+    # populate_university_name_v2
+    q = (
+        db.query(AnnouncementModel, UniversityModel)
+        .join(UniversityModel, AnnouncementModel.university_id == UniversityModel.id)
+    )
     if university_id:
         q = q.filter(AnnouncementModel.university_id == university_id)
     if category:
         q = q.filter(AnnouncementModel.category.ilike(f"%{category}%"))
     if search:
         q = q.filter(AnnouncementModel.title.ilike(f"%{search}%"))
-    return q.order_by(AnnouncementModel.date_scraped.desc()).offset(skip).limit(limit).all()
+    rows = q.order_by(AnnouncementModel.date_scraped.desc()).offset(skip).limit(limit).all()
+    return [
+        {
+            "id": a.id,
+            "university_id": a.university_id,
+            "university_name": u.name,
+            "institution_type": u.institution_type,
+            "university_code": u.short_code,
+            "category": a.category,
+            "title": a.title,
+            "summary": a.summary,
+            "source_url": a.source_url,
+            "has_attachment": a.has_attachment,
+            "attachment_url": a.attachment_url,
+            "pdf_extracted_text": a.pdf_extracted_text,
+            "date_published": a.date_published,
+            "date_scraped": a.date_scraped,
+        }
+        for a, u in rows
+    ]
 
 
 @app.post("/api/v1/trigger-scrape", tags=["Scraper Control"])
