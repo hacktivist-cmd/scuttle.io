@@ -101,9 +101,15 @@ export default function NotificationPrompt() {
                   <BellRing size={22} className="text-white" />
                 </div>
                 <div className="pr-6">
-                  <p className="font-semibold text-sm">Enable Notifications</p>
+                  <p className="font-semibold text-sm">
+                    Get pinged for {profile?.followedUniversities?.[0] || 'your schools'}?
+                  </p>
                   <p className="text-xs text-apple-gray leading-relaxed mt-0.5">
-                    Get pinged the moment your university posts an update. Free forever.
+                    {profile?.followedUniversities?.length
+                      ? `You follow ${profile.followedUniversities.length} ${
+                          profile.followedUniversities.length === 1 ? 'university' : 'universities'
+                        }. We'll notify you the moment they post an update.`
+                      : "We'll ping you when content matching your interests drops."}
                   </p>
                 </div>
               </div>

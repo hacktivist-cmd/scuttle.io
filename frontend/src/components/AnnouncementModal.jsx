@@ -21,6 +21,16 @@ export default function AnnouncementModal({ item, onClose }) {
       document.addEventListener('keydown', handleKey)
       document.body.style.overflow = 'hidden'
       markRead(item.id)
+
+      // ENGAGEMENT_TRACKER — increment view count for install prompt gating
+      try {
+        const key = `scuttle_seen_${item.id}`
+        if (!localStorage.getItem(key)) {
+          const count = parseInt(localStorage.getItem('scuttle_viewed_count') || '0', 10) + 1
+          localStorage.setItem('scuttle_viewed_count', String(count))
+          localStorage.setItem(key, '1')
+        }
+      } catch {}
     }
     return () => {
       document.removeEventListener('keydown', handleKey)

@@ -79,9 +79,13 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'firestore-cache',
+              // OFFLINE_FIRST — keep last 50 announcements readable offline
               expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60, // 1 hour
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * 14, // 2 weeks
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
               },
             },
           },

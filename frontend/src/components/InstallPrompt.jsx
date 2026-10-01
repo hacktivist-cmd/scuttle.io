@@ -22,6 +22,10 @@ export default function InstallPrompt() {
     // User dismissed before?
     if (localStorage.getItem('scuttle_pwa_dismissed') === 'true') return
 
+    // ENGAGEMENT_GATE — only show after user has viewed 2+ announcements
+    const engagement = parseInt(localStorage.getItem('scuttle_viewed_count') || '0', 10)
+    if (engagement < 2) return
+
     if (ios) {
       // iOS doesn't fire beforeinstallprompt — show after 15s
       setTimeout(() => setVisible(true), 15000)
