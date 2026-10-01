@@ -192,6 +192,105 @@ def parse_pdf_attachment(pdf_url: str) -> Optional[str]:
 
 # ==================== Image Extraction ====================
 
+
+
+# ==================== Date Extraction ====================
+
+import re as _re
+from datetime import datetime as _dt
+
+# Matches: 2025-03-15, 15/03/2025, 15-03-2025, March 15, 2025, March 15 2025
+_DATE_PATTERNS = [
+    _re.compile(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})'),          # 2025-03-15
+    _re.compile(r'(\d{1,2})[-/](\d{1,2})[-/](\d{4})'),          # 15/03/2025
+    _re.compile(r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})', _re.IGNORECASE),
+]
+
+_MONTH_MAP = {
+    'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+    'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12,
+}
+
+
+def extract_date_from_text(text: str):
+    """Try to find a publication date in the text. Returns datetime or None."""
+    if not text:
+        return None
+    text = text[:3000]  # Only scan first bit
+
+    for pat in _DATE_PATTERNS:
+        m = pat.search(text)
+        if m:
+            groups = m.groups()
+            try:
+                # Handle named months
+                if groups[0].lower() in _MONTH_MAP:
+                    month = _MONTH_MAP[groups[0].lower()]
+                    day = int(groups[1])
+                    year = int(groups[2])
+                else:
+                    parts = [int(g) for g in groups]
+                    if parts[0] > 31:  # Year first
+                        year, month, day = parts
+                    else:  # Day first
+                        day, month, year = parts
+                if 2020 <= year <= 2030 and 1 <= month <= 12 and 1 <= day <= 31:
+                    return _dt(year, month, day)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def is_too_old(date_obj, max_age_months: int = 6):
+    """Check if a date is older than the max allowed age."""
+    if date_obj is None:
+        return False  # Unknown dates pass through
+    now = _dt.utcnow()
+    days_old = (now - date_obj).days
+    return days_old > max_age_months * 30
+
+
+def extract_date_from_page(url: str):
+    """Fetch a page and try to extract the publication date."""
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
+        r = requests.get(url, headers=headers, timeout=8)
+        if r.status_code != 200:
+            return None
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        # 1. Meta tags (most reliable)
+        for prop in ["article:published_time", "og:published_time", "datePublished"]:
+            meta = soup.find("meta", property=prop) or soup.find("meta", attrs={"name": prop})
+            if meta and meta.get("content"):
+                try:
+                    return _dt.fromisoformat(meta["content"][:19].replace("Z", ""))
+                except Exception:
+                    pass
+
+        # 2. <time> tags
+        for t in soup.find_all("time"):
+            dt_attr = t.get("datetime")
+            if dt_attr:
+                try:
+                    return _dt.fromisoformat(dt_attr[:19].replace("Z", ""))
+                except Exception:
+                    pass
+            text_date = extract_date_from_text(t.get_text())
+            if text_date:
+                return text_date
+
+        # 3. Fallback: scan the body text
+        body = soup.find("article") or soup.find("main") or soup.body
+        if body:
+            return extract_date_from_text(body.get_text())
+
+        return None
+    except Exception as e:
+        logger.debug(f"Date extraction failed for {url}: {e}")
+        return None
+
+
 def extract_image_from_page(url: str) -> str:
     """Fetch a page and extract the best hero image (og:image preferred)."""
     try:
@@ -267,6 +366,12 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
             pdf_text = parse_pdf_attachment(attachment_url)
 
         # Extract hero image (only for new items)
+        # SKIP_OLD_ANNOUNCEMENT — check publication date, skip if older than 6 months
+        pub_date = extract_date_from_page(source_url) if source_url else None
+        if pub_date and is_too_old(pub_date, max_age_months=6):
+            logger.info(f"⏭️  Skipping old announcement ({pub_date.date()}): {title[:50]}")
+            return
+
         image_url = extract_image_from_page(source_url) if source_url else ""
 
         new_ann = AnnouncementModel(
@@ -280,7 +385,8 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
             has_attachment=has_att,
             attachment_url=attachment_url,
             pdf_extracted_text=pdf_text,
-            date_published=datetime.utcnow(),
+            # SET_DATE_PUBLISHED — use detected date if available
+            date_published=pub_date if pub_date else datetime.utcnow(),
         )
         db.add(new_ann)
         db.commit()
@@ -713,6 +819,140 @@ def sync_firestore(limit: int = 500):
         return {"status": "error", "message": str(e)}
     finally:
         db.close()
+
+
+
+
+# ==================== Admin Delete Endpoints ====================
+
+@app.delete("/api/v1/admin/announcements/{announcement_id}", tags=["Admin"])
+def delete_announcement(announcement_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Delete a single announcement from PostgreSQL + Firestore."""
+    ann = db.query(AnnouncementModel).filter(AnnouncementModel.id == announcement_id).first()
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+
+    # Delete from Firestore
+    try:
+        from app.services.firebase_sync import init_firebase
+        client = init_firebase()
+        if client:
+            client.collection("artifacts").document("scuttle-io-default")\
+                .collection("public").document("data")\
+                .collection("announcements").document(ann.slug_hash).delete()
+    except Exception as e:
+        logger.warning(f"Firestore delete skipped: {e}")
+
+    db.delete(ann)
+    db.commit()
+    logger.info(f"🗑️  Deleted: {ann.title[:60]}")
+    return {"status": "deleted", "id": str(announcement_id)}
+
+
+@app.post("/api/v1/admin/announcements/bulk-delete", tags=["Admin"])
+def bulk_delete_announcements(payload: dict, db: Session = Depends(get_db)):
+    """Delete multiple announcements. Expects {"ids": ["uuid1", "uuid2", ...]}."""
+    ids = payload.get("ids", [])
+    if not ids:
+        return {"deleted": 0}
+
+    try:
+        uuids = [uuid.UUID(i) for i in ids]
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid UUID list")
+
+    anns = db.query(AnnouncementModel).filter(AnnouncementModel.id.in_(uuids)).all()
+    slug_hashes = [a.slug_hash for a in anns]
+
+    # Delete from Firestore
+    try:
+        from app.services.firebase_sync import init_firebase
+        client = init_firebase()
+        if client:
+            col = client.collection("artifacts").document("scuttle-io-default")\
+                .collection("public").document("data")\
+                .collection("announcements")
+            for sh in slug_hashes:
+                col.document(sh).delete()
+    except Exception as e:
+        logger.warning(f"Firestore bulk delete skipped: {e}")
+
+    count = db.query(AnnouncementModel).filter(AnnouncementModel.id.in_(uuids)).delete(synchronize_session=False)
+    db.commit()
+    logger.info(f"🗑️  Bulk deleted: {count} announcements")
+    return {"deleted": count}
+
+
+@app.get("/api/v1/admin/announcements", tags=["Admin"])
+def list_all_announcements(
+    skip: int = 0, limit: int = 100,
+    search: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """List all announcements for admin management (with university info)."""
+    q = db.query(AnnouncementModel, UniversityModel).join(
+        UniversityModel, AnnouncementModel.university_id == UniversityModel.id
+    )
+    if search:
+        q = q.filter(AnnouncementModel.title.ilike(f"%{search}%"))
+    if category:
+        q = q.filter(AnnouncementModel.category == category)
+    rows = q.order_by(AnnouncementModel.date_scraped.desc()).offset(skip).limit(limit).all()
+    return [
+        {
+            "id": str(a.id),
+            "university_name": u.name,
+            "university_code": u.short_code,
+            "institution_type": u.institution_type,
+            "category": a.category,
+            "title": a.title,
+            "summary": a.summary,
+            "source_url": a.source_url,
+            "date_published": a.date_published.isoformat() if a.date_published else None,
+            "date_scraped": a.date_scraped.isoformat() if a.date_scraped else None,
+            "has_attachment": a.has_attachment,
+        }
+        for a, u in rows
+    ]
+
+
+
+
+# ==================== Unsubscribe Endpoint ====================
+
+import hashlib as _hashlib
+
+def _make_unsub_token(email: str) -> str:
+    """Create a deterministic token for an email."""
+    secret = os.getenv("GMAIL_APP_PASSWORD", "default-secret")[:16]
+    return _hashlib.sha256(f"{email}:{secret}".encode()).hexdigest()[:32]
+
+
+@app.get("/api/v1/unsubscribe", tags=["Emails"])
+def unsubscribe(token: str = Query(...)):
+    """One-click unsubscribe from newsletter."""
+    from app.services.firebase_sync import init_firebase
+
+    # Find user by matching token against all users
+    client = init_firebase()
+    if not client:
+        return {"status": "error", "message": "Firebase unavailable"}
+
+    updated = 0
+    for doc in client.collection("users").stream():
+        data = doc.to_dict()
+        email = data.get("email", "")
+        if email and _make_unsub_token(email) == token:
+            doc.reference.set({"newsletterEnabled": False}, merge=True)
+            updated += 1
+            logger.info(f"📬 Unsubscribed: {email}")
+            break
+
+    return {
+        "status": "success" if updated else "not_found",
+        "message": "You've been unsubscribed from Scuttle.io emails." if updated else "Token not recognized.",
+    }
 
 
 @app.get("/", tags=["Health Check"])

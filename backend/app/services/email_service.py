@@ -7,6 +7,15 @@ from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate, make_msgid
 from typing import List, Dict
 
+
+
+import hashlib as _hashlib
+
+def _make_unsub_token(email: str) -> str:
+    secret = os.getenv("GMAIL_APP_PASSWORD", "default-secret")[:16]
+    return _hashlib.sha256(f"{email}:{secret}".encode()).hexdigest()[:32]
+
+
 logger = logging.getLogger("email_service")
 
 GMAIL_USER = os.getenv("GMAIL_USER", "")
@@ -46,9 +55,15 @@ def _header_html() -> str:
     """
 
 
-def _footer_html(unsubscribe_url: str = "") -> str:
+def _footer_html(unsubscribe_url: str = "", recipient_email: str = "") -> str:
     if not unsubscribe_url:
-        unsubscribe_url = f"{SITE_URL}/profile"
+        if recipient_email:
+            token = _make_unsub_token(recipient_email)
+            # Point at backend directly for reliability
+            api_url = os.getenv("VITE_API_URL", "https://scuttle-api.onrender.com")
+            unsubscribe_url = f"{api_url}/api/v1/unsubscribe?token={token}"
+        else:
+            unsubscribe_url = f"{SITE_URL}/profile"
     return f"""
     <tr>
       <td align="center" style="padding:32px 24px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:#86868B;">
@@ -69,7 +84,7 @@ def _footer_html(unsubscribe_url: str = "") -> str:
     """
 
 
-def _wrap(inner: str, preheader: str = "") -> str:
+def _wrap(inner: str, preheader: str = "", recipient_email: str = "") -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -87,7 +102,7 @@ def _wrap(inner: str, preheader: str = "") -> str:
         <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="max-width:600px;width:100%;">
           {_header_html()}
           {inner}
-          {_footer_html()}
+          {_footer_html(recipient_email=recipient_email)}
         </table>
       </td>
     </tr>
@@ -100,7 +115,7 @@ def _wrap(inner: str, preheader: str = "") -> str:
 #  TEMPLATE 1 — NEWSLETTER
 # ══════════════════════════════════════════════════════════
 
-def _render_newsletter(subject: str, message: str, recipient_name: str) -> str:
+def _render_newsletter(subject: str, message: str, recipient_name: str, recipient_email: str = "") -> str:
     greeting = f"Hi {recipient_name}," if recipient_name else "Hi there,"
     paragraphs = "".join(
         f'<p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#1D1D1F;">{p}</p>'
@@ -131,7 +146,7 @@ def _render_newsletter(subject: str, message: str, recipient_name: str) -> str:
     </tr>
     """
 
-    return _wrap(inner, preheader=f"{subject} — from Scuttle.io")
+    return _wrap(inner, preheader=f"{subject} — from Scuttle.io", recipient_email=recipient_email)
 
 
 # ══════════════════════════════════════════════════════════
@@ -316,7 +331,7 @@ def _send_html(to_email: str, subject: str, html: str, list_unsubscribe: bool = 
 
 
 def send_email(to_email: str, subject: str, message: str, recipient_name: str = "") -> bool:
-    html = _render_newsletter(subject, message, recipient_name)
+    html = _render_newsletter(subject, message, recipient_name, to_email)
     return _send_html(to_email, subject, html)
 
 

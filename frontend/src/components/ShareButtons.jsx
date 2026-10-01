@@ -1,17 +1,19 @@
 import { useState } from 'react'
-import { Share2, Link2, MessageCircle, Twitter, Check } from 'lucide-react'
+import { Share2, Link2, MessageCircle, Check } from 'lucide-react'
+
+const XIcon = (props) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+  </svg>
+)
 
 export default function ShareButtons({ item }) {
   const [copied, setCopied] = useState(false)
 
   const siteUrl = 'https://scuttle-io.netlify.app'
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
   const shareTitle = item?.title || 'Scuttle.io'
   const shareUni = item?.university_name || ''
-  const shareCategory = item?.category || ''
-
-  const ogImage = `${apiUrl}/api/v1/og?title=${encodeURIComponent(shareTitle)}&university=${encodeURIComponent(shareUni)}&category=${encodeURIComponent(shareCategory)}`
 
   const shareUrl = `${siteUrl}/?share=${item?.id || ''}`
 
@@ -70,7 +72,7 @@ export default function ShareButtons({ item }) {
         title="Share on X"
         className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-apple-gray hover:text-apple-dark transition-colors"
       >
-        <Twitter size={15} />
+        <XIcon width={15} height={15} />
       </a>
       <button
         onClick={handleCopy}

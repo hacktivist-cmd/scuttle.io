@@ -51,10 +51,7 @@ export default function Home() {
   }, [search, typeFilter, categoryFilter, timeFilter, feedMode])
 
   const timeFiltered = useMemo(() => {
-    if (timeFilter === 'all') return announcements
-    const days = timeFilter === '7d' ? 7 : timeFilter === '30d' ? 30 : 90
-    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
-    return announcements.filter((a) => new Date(a.date_scraped).getTime() >= cutoff)
+    return announcements.filter((a) => isInTimeRange(a.date_published || a.date_scraped, timeFilter))
   }, [announcements, timeFilter])
 
   const { forYou, scoreMap, hasPreferences, matchCount } = usePersonalizedFeed(timeFiltered, {
@@ -111,12 +108,7 @@ export default function Home() {
     requireAuth(() => setSelectedItem(item), 'read the full notice')
   }
 
-  const timeOptions = [
-    { value: '7d', label: 'Last 7 days' },
-    { value: '30d', label: 'Last 30 days' },
-    { value: '90d', label: 'Last 90 days' },
-    { value: 'all', label: 'All time' },
-  ]
+  const timeOptions = TIME_FILTERS
 
   const showPersonalizedSection = feedMode === 'personalized' && user && hasPreferences
   const featuredTitle = showPersonalizedSection ? 'Picked for You' : 'Important Updates'
