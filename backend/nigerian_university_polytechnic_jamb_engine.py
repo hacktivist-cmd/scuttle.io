@@ -961,6 +961,34 @@ def get_db():
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
+
+    # AUTO_MIGRATE_V1
+    try:
+        from sqlalchemy import text as _text
+        with engine.connect() as conn:
+            for col, typ in [
+                ("scrape_interval_minutes", "VARCHAR(20) DEFAULT '360'"),
+                ("last_scraped_at", "TIMESTAMP"),
+                ("last_scrape_status", "VARCHAR(20) DEFAULT 'unknown'"),
+                ("last_scrape_error", "TEXT"),
+                ("consecutive_failures", "VARCHAR(10) DEFAULT '0'"),
+            ]:
+                try:
+                    conn.execute(_text(f"ALTER TABLE universities ADD COLUMN IF NOT EXISTS {col} {typ}"))
+                except Exception:
+                    pass
+            for col, typ in [
+                ("priority", "VARCHAR(20) DEFAULT 'normal'"),
+                ("image_url", "TEXT"),
+            ]:
+                try:
+                    conn.execute(_text(f"ALTER TABLE announcements ADD COLUMN IF NOT EXISTS {col} {typ}"))
+                except Exception:
+                    pass
+            conn.commit()
+            logger.info("✅ Auto-migration complete")
+    except Exception as mig_err:
+        logger.warning(f"Auto-migration skipped: {mig_err}")
     db = SessionLocal()
     try:
         for u in NIGERIAN_INSTITUTIONS_SEED:
