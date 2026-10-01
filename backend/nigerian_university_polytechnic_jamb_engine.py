@@ -578,6 +578,63 @@ def og_image(
     return make_og_response(title, university, category)
 
 
+
+
+# ==================== Stats Endpoint ====================
+
+from sqlalchemy import func as _func, desc as _desc
+
+@app.get("/api/v1/stats", tags=["Statistics"])
+def get_stats(db: Session = Depends(get_db)):
+    """Aggregate stats: totals, by category, top institutions, last 7 days."""
+    total = db.query(_func.count(AnnouncementModel.id)).scalar() or 0
+    total_universities = db.query(_func.count(UniversityModel.id)).scalar() or 0
+
+    # By category
+    by_cat = (
+        db.query(AnnouncementModel.category, _func.count(AnnouncementModel.id))
+        .group_by(AnnouncementModel.category)
+        .order_by(_desc(_func.count(AnnouncementModel.id)))
+        .all()
+    )
+
+    # Top institutions
+    by_uni = (
+        db.query(UniversityModel.name, UniversityModel.short_code, _func.count(AnnouncementModel.id))
+        .join(AnnouncementModel, AnnouncementModel.university_id == UniversityModel.id)
+        .group_by(UniversityModel.name, UniversityModel.short_code)
+        .order_by(_desc(_func.count(AnnouncementModel.id)))
+        .limit(20)
+        .all()
+    )
+
+    # Last 7 days
+    from datetime import timedelta as _td
+    seven_ago = datetime.utcnow() - _td(days=7)
+    by_day = (
+        db.query(_func.date_trunc("day", AnnouncementModel.date_scraped), _func.count(AnnouncementModel.id))
+        .filter(AnnouncementModel.date_scraped >= seven_ago)
+        .group_by(_func.date_trunc("day", AnnouncementModel.date_scraped))
+        .order_by(_func.date_trunc("day", AnnouncementModel.date_scraped))
+        .all()
+    )
+
+    return {
+        "totals": {
+            "announcements": total,
+            "universities": total_universities,
+        },
+        "by_category": [{"category": c, "count": n} for c, n in by_cat],
+        "top_institutions": [
+            {"name": name, "code": code, "count": n} for name, code, n in by_uni
+        ],
+        "last_7_days": [
+            {"date": dt.isoformat() if dt else None, "count": n} for dt, n in by_day
+        ],
+        "generated_at": datetime.utcnow().isoformat(),
+    }
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {
