@@ -36,3 +36,20 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Junk from accidental paste-in-terminal
+=*
+[0-9]*.[0-9]*
+Build
+Checking
+Cloning
+Deploying*
+Docs
+Downloaded
+Downloading
+Installing
+Running
+Setting
+Uploaded
+Uploading
+Using
