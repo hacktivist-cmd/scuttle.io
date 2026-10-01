@@ -29,8 +29,12 @@ export default function NotificationPrompt() {
     if (getPermissionState() === 'denied') return
     if (localStorage.getItem('scuttle_push_dismissed') === 'true') return
 
-    // Show after 30s
-    const timer = setTimeout(() => setVisible(true), 8000)
+    // CONTEXTUAL_V2 — only ask after user has something to track
+    const hasFollowedUnis = (profile?.followedUniversities?.length || 0) > 0
+    const hasInterests = (profile?.interests?.length || 0) > 0
+    if (!hasFollowedUnis && !hasInterests) return
+
+    const timer = setTimeout(() => setVisible(true), 4000)
     return () => clearTimeout(timer)
   }, [user, profile])
 
