@@ -848,11 +848,18 @@ def scrape_multipath_institution(uni_id: str, base_url: str, uni_name: str) -> i
                                     "calendar", "notice", "2026", "2027", "registration"]
                         if any(kw in title.lower() for kw in keywords):
                             full_url = href if href.startswith("http") else f"{base}/{href.lstrip('/')}"
+
+                            # DESC_FETCH — real description, then smart fallback
+                            summary = fetch_page_description(full_url)
+                            if not summary:
+                                cat = classify_announcement_category(title)
+                                summary = smart_summary_fallback(title, uni_name, cat)
+
                             submit_scraped_item_to_backend(
                                 university_id=uni_id,
                                 title=title,
                                 source_url=full_url,
-                                summary=f"Discovered via {path} crawler for {uni_name}",
+                                summary=summary,
                             )
             _time.sleep(0.1)
         except Exception:
@@ -972,13 +979,31 @@ def scrape_sitemap_institution(uni_id: str, base_url: str, uni_name: str) -> int
             if len(title) < 15:
                 continue
 
-            # Try to get og:description or meta description as summary
+            # Try to get real description (og:description preferred, then fallback)
             summary = ""
             for meta_name in ["description", "og:description"]:
                 meta = soup.find("meta", attrs={"name": meta_name}) or soup.find("meta", attrs={"property": meta_name})
-                if meta and meta.get("content"):
-                    summary = meta["content"][:300]
+                if meta and meta.get("content") and len(meta["content"].strip()) > 40:
+                    summary = meta["content"].strip()[:400]
                     break
+
+            # If no meta desc, try first paragraph
+            if not summary:
+                for container in ["article", "main", ".entry-content", ".post-content"]:
+                    node = soup.select_one(container)
+                    if node:
+                        for p in node.find_all("p"):
+                            txt = p.get_text(" ", strip=True)
+                            if len(txt) > 80 and "cookie" not in txt.lower():
+                                summary = txt[:400]
+                                break
+                        if summary:
+                            break
+
+            # Last resort: smart template
+            if not summary:
+                cat = classify_announcement_category(title)
+                summary = smart_summary_fallback(title, uni_name, cat)
 
             # Check if this URL is already in DB before counting
             slug_hash = hashlib.sha256(
@@ -1102,9 +1127,238 @@ def scrape_spa_institution(uni_id, base_url, uni_name, short_code):
     return added
 
 
+
+
+# ==================== Page Description Extractor ====================
+
+# DESC_EXTRACTOR_V1 — grab real meta description from any page
+def fetch_page_description(url: str, timeout: int = 3) -> str:
+    """
+    Open a page and extract the best available summary:
+    1. og:description (best)
+    2. twitter:description
+    3. <meta name="description">
+    4. First paragraph in <article> or <main>
+    Returns "" if nothing found.
+    """
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
+        r = requests.get(url, headers=headers, timeout=timeout)
+        if r.status_code != 200:
+            return ""
+
+        # SPA stub check — if page is < 1KB it's just a JS shell
+        if len(r.text) < 1500:
+            return ""
+
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        # 1. og:description
+        og = soup.find("meta", property="og:description")
+        if og and og.get("content"):
+            d = og["content"].strip()
+            if len(d) > 40:
+                return d[:400]
+
+        # 2. twitter:description
+        tw = soup.find("meta", attrs={"name": "twitter:description"})
+        if tw and tw.get("content"):
+            d = tw["content"].strip()
+            if len(d) > 40:
+                return d[:400]
+
+        # 3. Standard meta description
+        meta = soup.find("meta", attrs={"name": "description"})
+        if meta and meta.get("content"):
+            d = meta["content"].strip()
+            if len(d) > 40:
+                return d[:400]
+
+        # 4. First meaningful paragraph
+        for container in ["article", "main", ".entry-content", ".post-content", ".content", "body"]:
+            node = soup.select_one(container)
+            if not node:
+                continue
+            for p in node.find_all("p"):
+                txt = p.get_text(" ", strip=True)
+                # Filter out junk paragraphs
+                if len(txt) < 80:
+                    continue
+                if any(junk in txt.lower() for junk in [
+                    "cookie", "privacy policy", "terms of use",
+                    "subscribe", "sign up", "read more",
+                    "click here", "javascript", "enable js",
+                ]):
+                    continue
+                return txt[:400]
+
+        return ""
+    except Exception as e:
+        logger.debug(f"Desc extract failed for {url[:60]}: {str(e)[:40]}")
+        return ""
+
+
+# SMART_TEMPLATE_V1 — category-aware fallback when no description exists
+def smart_summary_fallback(title: str, uni_name: str, category: str) -> str:
+    """
+    Generate a contextual summary when the page has no usable description.
+    Uses the title + category to write something specific, not boilerplate.
+    """
+    t = title.lower()
+
+    # Post-UTME specific
+    if "post-utme" in t or "post utme" in t or "screening" in t:
+        return f"{uni_name} has released Post-UTME screening details. Applicants should review requirements and register before the deadline."
+
+    if "cut-off" in t or "cut off" in t or "cutoff" in t:
+        return f"{uni_name} has published the departmental cut-off marks for the current admission cycle."
+
+    # Admission list specific
+    if "admission list" in t or "merit list" in t or "1st batch" in t or "first batch" in t or "second batch" in t or "supplementary" in t:
+        return f"{uni_name} admission list is now available. Successful candidates should check their status and proceed with acceptance."
+
+    if "check admission" in t or "admission status" in t:
+        return f"{uni_name} admission portal is live. Applicants can now verify their admission status online."
+
+    if "acceptance fee" in t:
+        return f"{uni_name} has opened acceptance fee payment for newly admitted candidates. Payment deadline applies."
+
+    # Fees
+    if "school fees" in t or "tuition" in t or "fee schedule" in t:
+        return f"{uni_name} has released the approved fee schedule for the current session. Includes tuition and other charges."
+
+    # JAMB CAPS
+    if "caps" in t or "jamb" in t and "admission" in t:
+        return f"JAMB CAPS update affecting {uni_name} applicants. Log in to accept or reject your admission offer."
+
+    # Calendar
+    if "calendar" in t or "resumption" in t or "session" in t or "academic" in t:
+        return f"{uni_name} has published the academic calendar. Key dates for resumption and registration are now available."
+
+    # Registration
+    if "registration" in t or "form" in t or "application" in t or "sale of" in t:
+        return f"{uni_name} has opened registration for the current session. Application deadline and requirements are listed."
+
+    # Hostel
+    if "hostel" in t or "accommodation" in t:
+        return f"{uni_name} hostel application is now open. Students should apply online before the listed deadline."
+
+    # Screening
+    if "screening" in t or "verification" in t:
+        return f"{uni_name} has scheduled document screening for admitted candidates. Details on venue and requirements are out."
+
+    # BETTER_TEMPLATES — more specific fallbacks
+    if "admission" in t:
+        return f"{uni_name} has published a new admission update. Review the notice for specific requirements and deadlines."
+
+    if "fees" in t or "payment" in t:
+        return f"{uni_name} has released new fee/payment information. Check the notice for amounts and payment deadlines."
+
+    if "result" in t or "gpa" in t or "cgpa" in t:
+        return f"{uni_name} has posted new academic results. Log in to view your scores."
+
+    if "resumption" in t or "reopening" in t:
+        return f"{uni_name} has announced a resumption update. Review the notice for key dates."
+
+    if "lecture" in t or "timetable" in t or "exam" in t:
+        return f"{uni_name} has published an academic schedule update. Check the notice for details."
+
+    if "scholarship" in t or "bursary" in t or "grant" in t:
+        return f"{uni_name} has announced a scholarship/bursary opportunity. Review eligibility and application details."
+
+    if "matriculation" in t or "convocation" in t or "graduation" in t:
+        return f"{uni_name} has scheduled a ceremony. Details on date, venue and requirements are in the notice."
+
+    # Very last resort — still specific enough
+    if category and category != "General News":
+        return f"{uni_name} has released a new {category.lower()} notice. Review the full details on the institution's website."
+
+    return f"{uni_name} has published a new notice. Review the full details on the institution's website."
+
+
+
+
+# TITLE_ENRICH_V1 — make generic link titles more specific
+def enrich_title(title: str, uni_name: str, category: str) -> str:
+    """If the title is too generic, make it specific to the university + context."""
+    generic = {
+        "check admission status": "Admission Status Portal Now Open",
+        "admission status": "Admission Status Update",
+        "login": "Admission Portal Login",
+        "login to check admission status": "Admission Portal Now Open",
+        "click here": None,  # skip
+        "read more": None,   # skip
+        "admission list": "Admission List Released",
+        "post utme": "Post-UTME Update",
+        "post-utme": "Post-UTME Update",
+    }
+
+    t_clean = title.strip().rstrip(". ").lower()
+
+    if t_clean in generic:
+        replacement = generic[t_clean]
+        if replacement is None:
+            return title  # keep but flag
+        return f"{uni_name}: {replacement}"
+
+    # If title is short and generic, prepend university
+    if len(title) < 30 and title.lower().startswith(("check", "click", "see", "view", "read")):
+        return f"{uni_name}: {title}"
+
+    return title
+
+
+
+
+# ==================== Junk Filter ====================
+
+# JUNK_FILTER_V1 — reject nav links, emails, phones, generic text
+import re as _re_junk
+
+_EMAIL_RE = _re_junk.compile(r'^[\w.+-]+@[\w-]+\.[\w.]+$', _re_junk.IGNORECASE)
+_PHONE_RE = _re_junk.compile(r'\+?234[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{4}')
+_URL_RE = _re_junk.compile(r'https?://\S+')
+
+_GENERIC_TITLES = {
+    "login", "sign in", "sign up", "register", "click here", "read more",
+    "learn more", "view more", "more", "home", "contact us", "about us",
+    "admissions", "undergraduate", "postgraduate", "apply now",
+    "login to check admission status", "check admission status",
+    "view academic calendar", "academic calendar", "news", "events",
+    "blog", "gallery", "portal", "search", "menu", "facebook",
+    "twitter", "instagram", "linkedin", "youtube", "whatsapp",
+    "privacy policy", "terms of use", "sitemap", "rss", "feed",
+}
+
+
+def is_junk_title(title: str) -> bool:
+    """Return True if the title is obviously a nav link or contact info, not news."""
+    if not title:
+        return True
+    t = title.strip()
+    t_low = t.lower()
+
+    if len(t) < 12:
+        return True
+    if _EMAIL_RE.match(t_low):
+        return True
+    if _PHONE_RE.search(t):
+        return True
+    if _URL_RE.search(t_low) or t_low.startswith("www."):
+        return True
+    if t_low in _GENERIC_TITLES or t_low.rstrip(". ") in _GENERIC_TITLES:
+        return True
+    return False
+
+
 def submit_scraped_item_to_backend(university_id, title, source_url, summary=None, attachment_url=None, image_url=None, date_published=None):
+    # JUNK_FILTER — reject nav links, emails, phones
+    if is_junk_title(title):
+        logger.debug(f"⏭️  Skipping junk title: {title[:60]}")
+        return
+
     category = classify_announcement_category(title)
-    slug_hash = hashlib.sha256(f"{university_id}-{title.strip().lower()}".encode()).hexdigest()
+    slug_hash = hashlib.sha256(f"{university_id}-{title.strip().lower()}").hexdigest()
 
     db = SessionLocal()
     try:
@@ -1112,6 +1366,14 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
             return
         uni = db.query(UniversityModel).filter(UniversityModel.id == university_id).first()
         if not uni:
+            return
+
+        # TITLE_ENRICH — make generic titles specific to this university
+        title = enrich_title(title, uni.name, category)
+        slug_hash = hashlib.sha256(f"{university_id}-{title.strip().lower()}").hexdigest()
+
+        # Recheck dedupe (since title changed)
+        if db.query(AnnouncementModel).filter(AnnouncementModel.slug_hash == slug_hash).first():
             return
 
         pdf_text = None
