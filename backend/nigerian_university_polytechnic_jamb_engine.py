@@ -43,7 +43,6 @@ celery_app = Celery("scuttle_tasks", broker=REDIS_URL, backend=REDIS_URL)
 celery_app.conf.timezone = "Africa/Lagos"
 
 # ==================== Beat Schedule ====================
-# ==================== Beat Schedule ====================
 celery_app.conf.beat_schedule = {
     "scrape-all-institutions-and-jamb-dynamic": {
         "task": "main.run_all_scrapers_and_jamb",

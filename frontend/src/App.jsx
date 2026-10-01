@@ -20,6 +20,7 @@ import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
 import Profile from './pages/Profile'
 
+import AdminLogin from './pages/admin/AdminLogin'
 import AdminHome from './pages/admin/AdminHome'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminNewsletter from './pages/admin/AdminNewsletter'
@@ -56,6 +57,9 @@ export default function App() {
           />
           <Route path="*" element={<Home />} />
         </Route>
+
+        {/* Separate admin login (not protected) */}
+        <Route path="/admin/login" element={<AdminLogin />} />
 
         {/* Admin panel — completely separate */}
         <Route
