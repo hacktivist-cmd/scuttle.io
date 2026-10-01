@@ -3,6 +3,7 @@ import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router-do
 import {
   LayoutDashboard, Users, Mail, FileText, Zap, LogOut, ChevronLeft,
   Shield, Menu, X, PanelLeftClose, PanelLeftOpen,
+  Activity,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
