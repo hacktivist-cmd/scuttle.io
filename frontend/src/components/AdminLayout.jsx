@@ -12,6 +12,7 @@ const navItems = [
   { to: '/admin/newsletter', label: 'Newsletter', icon: Mail },
   { to: '/admin/announcements', label: 'Announcements', icon: FileText },
   { to: '/admin/scraper', label: 'Scraper', icon: Zap },
+  { to: '/admin/health', label: 'Health', icon: Activity },
 ]
 
 export default function AdminLayout() {

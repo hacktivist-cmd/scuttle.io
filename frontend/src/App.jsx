@@ -26,6 +26,7 @@ import AdminUsers from './pages/admin/AdminUsers'
 import AdminNewsletter from './pages/admin/AdminNewsletter'
 import AdminAnnouncements from './pages/admin/AdminAnnouncements'
 import AdminScraper from './pages/admin/AdminScraper'
+import AdminHealth from './pages/admin/AdminHealth'
 
 export default function App() {
   return (
@@ -75,6 +76,7 @@ export default function App() {
           <Route path="newsletter" element={<AdminNewsletter />} />
           <Route path="announcements" element={<AdminAnnouncements />} />
           <Route path="scraper" element={<AdminScraper />} />
+          <Route path="health" element={<AdminHealth />} />
         </Route>
       </Routes>
     </AuthProvider>

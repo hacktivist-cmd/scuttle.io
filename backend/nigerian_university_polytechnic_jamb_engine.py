@@ -1402,6 +1402,47 @@ def university_health(db: Session = Depends(get_db)):
     ]
 
 
+
+
+# ==================== Purge Endpoint ====================
+
+@app.post("/api/v1/admin/purge-announcements", tags=["Admin"])
+def purge_all_announcements(db: Session = Depends(get_db)):
+    """Delete ALL announcements from PostgreSQL + Firestore. Keeps users intact."""
+    from app.services.firebase_sync import init_firebase
+
+    # PostgreSQL
+    pg_count = db.query(AnnouncementModel).count()
+    db.query(AnnouncementModel).delete()
+    db.commit()
+    logger.info(f"🗑️  Purged {pg_count} from PostgreSQL")
+
+    # Firestore
+    fs_count = 0
+    try:
+        client = init_firebase()
+        if client:
+            col = (
+                client.collection("artifacts")
+                .document("scuttle-io-default")
+                .collection("public").document("data")
+                .collection("announcements")
+            )
+            docs = list(col.stream())
+            for d in docs:
+                d.reference.delete()
+                fs_count += 1
+            logger.info(f"🗑️  Purged {fs_count} from Firestore")
+    except Exception as e:
+        logger.warning(f"Firestore purge skipped: {e}")
+
+    return {
+        "status": "purged",
+        "postgres_deleted": pg_count,
+        "firestore_deleted": fs_count,
+    }
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {
