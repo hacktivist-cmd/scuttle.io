@@ -2484,6 +2484,36 @@ def sync_firestore_async_http():
     return {"status": "queued", "message": "Sync task dispatched to Celery"}
 
 
+
+
+# ==================== URL Sync Endpoint ====================
+
+@app.post("/api/v1/admin/sync-urls", tags=["Admin"])
+def sync_urls_from_seed(db: Session = Depends(get_db)):
+    """
+    Update every university's base_url in the DB to match the current seed.
+    Use this when you've fixed URLs in the engine seed and need to push them live.
+    """
+    updated = 0
+    skipped = 0
+
+    for u in NIGERIAN_INSTITUTIONS_SEED:
+        uni = db.query(UniversityModel).filter(
+            UniversityModel.short_code == u["short_code"]
+        ).first()
+        if not uni:
+            skipped += 1
+            continue
+        if uni.base_url != u["base_url"]:
+            old = uni.base_url
+            uni.base_url = u["base_url"]
+            updated += 1
+            logger.info(f"🔗 {u['short_code']}: {old} → {u['base_url']}")
+
+    db.commit()
+    return {"updated": updated, "skipped": skipped, "total": len(NIGERIAN_INSTITUTIONS_SEED)}
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {
