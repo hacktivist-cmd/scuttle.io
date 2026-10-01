@@ -1443,6 +1443,64 @@ def purge_all_announcements(db: Session = Depends(get_db)):
     }
 
 
+
+
+# ==================== Seed Universities Endpoint ====================
+
+@app.post("/api/v1/admin/seed-universities", tags=["Admin"])
+def seed_universities(db: Session = Depends(get_db)):
+    """Force-insert all universities from the seed list that aren't already in the DB."""
+    added, skipped = 0, 0
+    for u in NIGERIAN_INSTITUTIONS_SEED:
+        existing = db.query(UniversityModel).filter(
+            UniversityModel.short_code == u["short_code"]
+        ).first()
+        if not existing:
+            db.add(UniversityModel(
+                name=u["name"],
+                short_code=u["short_code"],
+                institution_type=u["institution_type"],
+                base_url=u["base_url"],
+                is_active=True,
+            ))
+            added += 1
+        else:
+            skipped += 1
+    db.commit()
+    logger.info(f"🌱 Seeded {added} new universities")
+    return {"added": added, "skipped": skipped, "total": len(NIGERIAN_INSTITUTIONS_SEED)}
+
+
+
+
+# ==================== Diagnostic ====================
+
+@app.get("/api/v1/admin/diagnostic", tags=["Admin"])
+def diagnostic(db: Session = Depends(get_db)):
+    from datetime import timedelta
+    from sqlalchemy import func as _func
+
+    total = db.query(_func.count(AnnouncementModel.id)).scalar() or 0
+    last_hour = db.query(_func.count(AnnouncementModel.id)).filter(
+        AnnouncementModel.date_scraped >= datetime.utcnow() - timedelta(hours=1)
+    ).scalar() or 0
+    unis_total = db.query(_func.count(UniversityModel.id)).scalar() or 0
+    unis_scraped = db.query(UniversityModel).filter(
+        UniversityModel.last_scraped_at.isnot(None)
+    ).count()
+    recent = db.query(UniversityModel).filter(
+        UniversityModel.last_scraped_at >= datetime.utcnow() - timedelta(hours=1)
+    ).count()
+
+    return {
+        "announcements_total": total,
+        "announcements_last_hour": last_hour,
+        "universities_total": unis_total,
+        "universities_with_scrapes": unis_scraped,
+        "universities_last_hour": recent,
+    }
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {
