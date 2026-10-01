@@ -70,6 +70,14 @@ class UniversityModel(Base):
     institution_type = Column(String(50), nullable=False, default="University")
     base_url = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+
+    # Scraper tracking
+    scrape_interval_minutes = Column(String(20), default="360", nullable=False)
+    last_scraped_at = Column(DateTime, nullable=True)
+    last_scrape_status = Column(String(20), default="unknown", nullable=False)
+    last_scrape_error = Column(Text, nullable=True)
+    consecutive_failures = Column(String(10), default="0", nullable=False)
+
     announcements = relationship("AnnouncementModel", back_populates="university", cascade="all, delete-orphan")
 
 
@@ -125,27 +133,321 @@ class AnnouncementResponse(BaseModel):
 
 
 NIGERIAN_INSTITUTIONS_SEED = [
-    {"name": "Joint Admissions and Matriculation Board", "short_code": "JAMB", "institution_type": "Board", "base_url": "https://www.jamb.gov.ng"},
-    {"name": "University of Lagos", "short_code": "UNILAG", "institution_type": "Federal University", "base_url": "https://unilag.edu.ng"},
-    {"name": "University of Ibadan", "short_code": "UI", "institution_type": "Federal University", "base_url": "https://ui.edu.ng"},
-    {"name": "Obafemi Awolowo University", "short_code": "OAU", "institution_type": "Federal University", "base_url": "https://oauife.edu.ng"},
-    {"name": "Ahmadu Bello University", "short_code": "ABU", "institution_type": "Federal University", "base_url": "https://abu.edu.ng"},
-    {"name": "University of Nigeria, Nsukka", "short_code": "UNN", "institution_type": "Federal University", "base_url": "https://unn.edu.ng"},
-    {"name": "University of Benin", "short_code": "UNIBEN", "institution_type": "Federal University", "base_url": "https://uniben.edu.ng"},
-    {"name": "University of Ilorin", "short_code": "UNILORIN", "institution_type": "Federal University", "base_url": "https://unilorin.edu.ng"},
-    {"name": "University of Port Harcourt", "short_code": "UNIPORT", "institution_type": "Federal University", "base_url": "https://uniport.edu.ng"},
-    {"name": "Federal University of Technology, Akure", "short_code": "FUTA", "institution_type": "Federal University", "base_url": "https://futa.edu.ng"},
-    {"name": "Lagos State University", "short_code": "LASU", "institution_type": "State University", "base_url": "https://lasu.edu.ng"},
-    {"name": "Ladoke Akintola University of Technology", "short_code": "LAUTECH", "institution_type": "State University", "base_url": "https://lautech.edu.ng"},
-    {"name": "Ambrose Alli University", "short_code": "AAU", "institution_type": "State University", "base_url": "https://aauekpoma.edu.ng"},
-    {"name": "Delta State University", "short_code": "DELSU", "institution_type": "State University", "base_url": "https://delsu.edu.ng"},
-    {"name": "Rivers State University", "short_code": "RSU", "institution_type": "State University", "base_url": "https://rsu.edu.ng"},
-    {"name": "Covenant University", "short_code": "COVENANT", "institution_type": "Private University", "base_url": "https://covenantuniversity.edu.ng"},
-    {"name": "Babcock University", "short_code": "BABCOCK", "institution_type": "Private University", "base_url": "https://babcock.edu.ng"},
-    {"name": "Afe Babalola University", "short_code": "ABUAD", "institution_type": "Private University", "base_url": "https://abuad.edu.ng"},
-    {"name": "Baze University", "short_code": "BAZE", "institution_type": "Private University", "base_url": "https://bazeuniversity.edu.ng"},
-    {"name": "Yaba College of Technology", "short_code": "YABATECH", "institution_type": "Polytechnic", "base_url": "https://yabatech.edu.ng"},
-    {"name": "Kaduna Polytechnic", "short_code": "KADPOLY", "institution_type": "Polytechnic", "base_url": "https://kadpoly.edu.ng"},
+    {"name": 'Joint Admissions and Matriculation Board', "short_code": 'JAMB', "institution_type": 'Board', "base_url": 'https://www.jamb.gov.ng'},
+    {"name": 'National Open University of Nigeria', "short_code": 'NOUN', "institution_type": 'Federal University', "base_url": 'https://nouedu.net'},
+    {"name": 'Abubakar Tafawa Balewa University', "short_code": 'ATBU', "institution_type": 'Federal University', "base_url": 'https://atbu.edu.ng'},
+    {"name": 'Ahmadu Bello University', "short_code": 'ABU', "institution_type": 'Federal University', "base_url": 'https://abu.edu.ng'},
+    {"name": 'Alex Ekwueme Federal University, Ndufu-Alike', "short_code": 'FUNAI', "institution_type": 'Federal University', "base_url": 'https://funai.edu.ng'},
+    {"name": 'Bayero University Kano', "short_code": 'BUK', "institution_type": 'Federal University', "base_url": 'https://buk.edu.ng'},
+    {"name": 'Federal University, Birnin Kebbi', "short_code": 'FUBK', "institution_type": 'Federal University', "base_url": 'https://fubk.edu.ng'},
+    {"name": 'Federal University, Dutse', "short_code": 'FUD', "institution_type": 'Federal University', "base_url": 'https://fud.edu.ng'},
+    {"name": 'Federal University, Dutsin-Ma', "short_code": 'FUDMA', "institution_type": 'Federal University', "base_url": 'https://fudma.edu.ng'},
+    {"name": 'Federal University, Gashua', "short_code": 'FUGASHUA', "institution_type": 'Federal University', "base_url": 'https://fugashua.edu.ng'},
+    {"name": 'Federal University, Gusau', "short_code": 'FUGUSAU', "institution_type": 'Federal University', "base_url": 'https://fugusau.edu.ng'},
+    {"name": 'Federal University, Kashere', "short_code": 'FUKASHERE', "institution_type": 'Federal University', "base_url": 'https://fukashere.edu.ng'},
+    {"name": 'Federal University, Lafia', "short_code": 'FULAFIA', "institution_type": 'Federal University', "base_url": 'https://fulafia.edu.ng'},
+    {"name": 'Federal University, Lokoja', "short_code": 'FULOKOJA', "institution_type": 'Federal University', "base_url": 'https://fulokoja.edu.ng'},
+    {"name": 'Federal University, Otuoke', "short_code": 'FUOTUOKE', "institution_type": 'Federal University', "base_url": 'https://fuotuoke.edu.ng'},
+    {"name": 'Federal University, Oye-Ekiti', "short_code": 'FUOYE', "institution_type": 'Federal University', "base_url": 'https://fuoye.edu.ng'},
+    {"name": 'Federal University, Wukari', "short_code": 'FUWUKARI', "institution_type": 'Federal University', "base_url": 'https://fuwukari.edu.ng'},
+    {"name": 'Federal University of Agriculture, Abeokuta', "short_code": 'FUNAAB', "institution_type": 'Federal University', "base_url": 'https://funaab.edu.ng'},
+    {"name": 'Federal University of Petroleum Resources, Effurun', "short_code": 'FUPRE', "institution_type": 'Federal University', "base_url": 'https://fupre.edu.ng'},
+    {"name": 'Federal University of Technology, Akure', "short_code": 'FUTA', "institution_type": 'Federal University', "base_url": 'https://futa.edu.ng'},
+    {"name": 'Federal University of Technology, Minna', "short_code": 'FUTMINNA', "institution_type": 'Federal University', "base_url": 'https://futminna.edu.ng'},
+    {"name": 'Federal University of Technology, Owerri', "short_code": 'FUTO', "institution_type": 'Federal University', "base_url": 'https://futo.edu.ng'},
+    {"name": 'Michael Okpara University of Agriculture, Umudike', "short_code": 'MOUAU', "institution_type": 'Federal University', "base_url": 'https://mouau.edu.ng'},
+    {"name": 'Modibbo Adama University, Yola', "short_code": 'MAU', "institution_type": 'Federal University', "base_url": 'https://mau.edu.ng'},
+    {"name": 'Nnamdi Azikiwe University, Awka', "short_code": 'UNIZIK', "institution_type": 'Federal University', "base_url": 'https://unizik.edu.ng'},
+    {"name": 'Obafemi Awolowo University, Ile-Ife', "short_code": 'OAU', "institution_type": 'Federal University', "base_url": 'https://oauife.edu.ng'},
+    {"name": 'University of Benin', "short_code": 'UNIBEN', "institution_type": 'Federal University', "base_url": 'https://uniben.edu.ng'},
+    {"name": 'University of Calabar', "short_code": 'UNICAL', "institution_type": 'Federal University', "base_url": 'https://unical.edu.ng'},
+    {"name": 'University of Ibadan', "short_code": 'UI', "institution_type": 'Federal University', "base_url": 'https://ui.edu.ng'},
+    {"name": 'University of Ilorin', "short_code": 'UNILORIN', "institution_type": 'Federal University', "base_url": 'https://unilorin.edu.ng'},
+    {"name": 'University of Jos', "short_code": 'UNIJOS', "institution_type": 'Federal University', "base_url": 'https://unijos.edu.ng'},
+    {"name": 'University of Lagos', "short_code": 'UNILAG', "institution_type": 'Federal University', "base_url": 'https://unilag.edu.ng'},
+    {"name": 'University of Maiduguri', "short_code": 'UNIMAID', "institution_type": 'Federal University', "base_url": 'https://unimaid.edu.ng'},
+    {"name": 'University of Nigeria, Nsukka', "short_code": 'UNN', "institution_type": 'Federal University', "base_url": 'https://unn.edu.ng'},
+    {"name": 'University of Port Harcourt', "short_code": 'UNIPORT', "institution_type": 'Federal University', "base_url": 'https://uniport.edu.ng'},
+    {"name": 'University of Uyo', "short_code": 'UNIUYO', "institution_type": 'Federal University', "base_url": 'https://uniuyo.edu.ng'},
+    {"name": 'Usmanu Danfodiyo University, Sokoto', "short_code": 'UDUSOK', "institution_type": 'Federal University', "base_url": 'https://udusok.edu.ng'},
+    {"name": 'Federal University of Health Sciences, Otukpo', "short_code": 'FUHSO', "institution_type": 'Federal University', "base_url": 'https://fuhso.edu.ng'},
+    {"name": 'Federal University of Health Sciences, Ila Orangun', "short_code": 'FUHSI', "institution_type": 'Federal University', "base_url": 'https://fuhsi.edu.ng'},
+    {"name": 'Federal University of Agriculture, Zuru', "short_code": 'FUAZ', "institution_type": 'Federal University', "base_url": 'https://fuaz.edu.ng'},
+    {"name": 'Yusuf Maitama Sule Federal University of Education', "short_code": 'YMSFUE', "institution_type": 'Federal University', "base_url": 'https://ymsfue.edu.ng'},
+    {"name": 'Adeyemi Federal University of Education', "short_code": 'AFUED', "institution_type": 'Federal University', "base_url": 'https://afued.edu.ng'},
+    {"name": 'Federal University of Allied Health Sciences', "short_code": 'FUAHS', "institution_type": 'Federal University', "base_url": 'https://fuahse.edu.ng'},
+    {"name": 'Federal University of Medicine and Medical Sciences', "short_code": 'FUMMSA', "institution_type": 'Federal University', "base_url": 'https://fummsa.net'},
+    {"name": 'Federal University of Education Pankshin', "short_code": 'FEDUNIPANKS', "institution_type": 'Federal University', "base_url": 'https://fedunipanks.edu.ng'},
+    {"name": 'Federal University of Education Kontagora', "short_code": 'FEDUNIKONT', "institution_type": 'Federal University', "base_url": 'https://fedunikont.edu.ng'},
+    {"name": 'University of Maritime Studies', "short_code": 'UNIMARITIME', "institution_type": 'Federal University', "base_url": 'https://unimaritime.edu.ng'},
+    {"name": 'Federal University of Environment and Technology', "short_code": 'FUET', "institution_type": 'Federal University', "base_url": 'https://fuet.edu.ng'},
+    {"name": 'Federal University of Applied Sciences', "short_code": 'FUDAPPLIED', "institution_type": 'Federal University', "base_url": 'https://fudapplied.edu.ng'},
+    {"name": 'Tai Solarin Federal University of Education', "short_code": 'TSFUE', "institution_type": 'Federal University', "base_url": 'https://tsfue.edu.ng'},
+    {"name": 'Federal University of Agriculture and Developmental Studies', "short_code": 'FUADS', "institution_type": 'Federal University', "base_url": 'https://fuads.edu.ng'},
+    {"name": 'Federal University of Technology and Environmental Studies', "short_code": 'FUTES', "institution_type": 'Federal University', "base_url": 'https://futes.edu.ng'},
+    {"name": 'Federal University of Agriculture and Technology Okeho', "short_code": 'FUATO', "institution_type": 'Federal University', "base_url": 'https://fuato.edu.ng'},
+    {"name": 'Federal University of Health Science and Technology', "short_code": 'FUHST', "institution_type": 'Federal University', "base_url": 'https://fuhst.edu.ng'},
+    {"name": 'Federal University of Agriculture and Technology Obio-Akpa', "short_code": 'FUATOBIO', "institution_type": 'Federal University', "base_url": 'https://fuatobio.edu.ng'},
+    {"name": 'Federal University of Science and Technology, Epe', "short_code": 'FUSTEPE', "institution_type": 'Federal University', "base_url": 'https://fustepe.edu.ng'},
+    {"name": 'Federal University of Science and Technology, Kabo', "short_code": 'FUSTKABO', "institution_type": 'Federal University', "base_url": 'https://fustkabo.edu.ng'},
+    {"name": 'Nigerian Maritime University Okerenkoko', "short_code": 'NMU', "institution_type": 'Federal University', "base_url": 'https://nmu.edu.ng'},
+    {"name": 'Air Force Institute of Technology', "short_code": 'AFIT', "institution_type": 'Federal University', "base_url": 'https://afit.edu.ng'},
+    {"name": 'Nigerian Army University Biu', "short_code": 'NAUB', "institution_type": 'Federal University', "base_url": 'https://naub.edu.ng'},
+    {"name": 'David Nweze Umahi Federal University of Medical Sciences', "short_code": 'DNUMFUMS', "institution_type": 'Federal University', "base_url": 'https://kdums.edu.ng'},
+    {"name": 'Admiralty University Ibusa', "short_code": 'ADUN', "institution_type": 'Federal University', "base_url": 'https://adun.edu.ng'},
+    {"name": 'Federal University of Transportation Daura', "short_code": 'FUTDAURA', "institution_type": 'Federal University', "base_url": 'https://futrd.edu.ng'},
+    {"name": 'African Aviation and Aerospace University', "short_code": 'AAAU', "institution_type": 'Federal University', "base_url": 'https://aaau.edu.ng'},
+    {"name": 'National University of Science and Technology', "short_code": 'NUST', "institution_type": 'Federal University', "base_url": 'https://nust.edu.ng'},
+    {"name": 'Federal University of Agriculture Bassam-Biri', "short_code": 'FUAB', "institution_type": 'Federal University', "base_url": 'https://fuab.edu.ng'},
+    {"name": 'Federal University of Health Sciences Kwale', "short_code": 'FUHSKWALE', "institution_type": 'Federal University', "base_url": 'https://fuhskwale.edu.ng'},
+    {"name": 'Federal University of Health Sciences, Katsina', "short_code": 'FUHSKATSINA', "institution_type": 'Federal University', "base_url": 'https://fuhskatsina.edu.ng'},
+    {"name": 'Federal University of Agriculture, Mubi', "short_code": 'FUAMUBI', "institution_type": 'Federal University', "base_url": 'https://fuamubi.edu.ng'},
+    {"name": 'Federal University of Education, Zaria', "short_code": 'FUEZARIA', "institution_type": 'Federal University', "base_url": 'https://fuezaria.edu.ng'},
+    {"name": 'Alvan Ikoku Federal University of Education', "short_code": 'AIFUE', "institution_type": 'Federal University', "base_url": 'https://aifue.edu.ng'},
+    {"name": 'Abia State University', "short_code": 'ABSU', "institution_type": 'State University', "base_url": 'https://absu.edu.ng'},
+    {"name": 'Adamawa State University', "short_code": 'ADSU', "institution_type": 'State University', "base_url": 'https://adsu.edu.ng'},
+    {"name": 'Adekunle Ajasin University', "short_code": 'AAUA', "institution_type": 'State University', "base_url": 'https://aaua.edu.ng'},
+    {"name": 'Akwa Ibom State University', "short_code": 'AKSU', "institution_type": 'State University', "base_url": 'https://aksu.edu.ng'},
+    {"name": 'Ambrose Alli University', "short_code": 'AAU', "institution_type": 'State University', "base_url": 'https://aauekpoma.edu.ng'},
+    {"name": 'Anambra State University (COOU)', "short_code": 'COOU', "institution_type": 'State University', "base_url": 'https://coou.edu.ng'},
+    {"name": 'Bauchi State University, Gadau', "short_code": 'BASU', "institution_type": 'State University', "base_url": 'https://basug.edu.ng'},
+    {"name": 'Benue State University', "short_code": 'BSU', "institution_type": 'State University', "base_url": 'https://bsum.edu.ng'},
+    {"name": 'Borno State University', "short_code": 'BOSU', "institution_type": 'State University', "base_url": 'https://bosu.edu.ng'},
+    {"name": 'Cross River University of Technology', "short_code": 'CRUTECH', "institution_type": 'State University', "base_url": 'https://crutech.edu.ng'},
+    {"name": 'Delta State University, Abraka', "short_code": 'DELSU', "institution_type": 'State University', "base_url": 'https://delsu.edu.ng'},
+    {"name": 'Delta State University of Science and Technology', "short_code": 'DSUST', "institution_type": 'State University', "base_url": 'https://dsust.edu.ng'},
+    {"name": 'Ebonyi State University', "short_code": 'EBSU', "institution_type": 'State University', "base_url": 'https://ebsu.edu.ng'},
+    {"name": 'Ekiti State University', "short_code": 'EKSU', "institution_type": 'State University', "base_url": 'https://eksu.edu.ng'},
+    {"name": 'Enugu State University of Science and Technology', "short_code": 'ESUT', "institution_type": 'State University', "base_url": 'https://esut.edu.ng'},
+    {"name": 'Gombe State University', "short_code": 'GSU', "institution_type": 'State University', "base_url": 'https://gsu.edu.ng'},
+    {"name": 'Ibrahim Badamasi Babangida University', "short_code": 'IBBU', "institution_type": 'State University', "base_url": 'https://ibbu.edu.ng'},
+    {"name": 'Imo State University', "short_code": 'IMSU', "institution_type": 'State University', "base_url": 'https://imsu.edu.ng'},
+    {"name": 'Kaduna State University', "short_code": 'KASU', "institution_type": 'State University', "base_url": 'https://kasu.edu.ng'},
+    {"name": 'Kano University of Science and Technology', "short_code": 'KUST', "institution_type": 'State University', "base_url": 'https://kustwudil.edu.ng'},
+    {"name": 'Kebbi State University of Science and Technology', "short_code": 'KSUSTA', "institution_type": 'State University', "base_url": 'https://ksusta.edu.ng'},
+    {"name": 'Kogi State University (PAAU)', "short_code": 'PAAU', "institution_type": 'State University', "base_url": 'https://paau.edu.ng'},
+    {"name": 'Kwara State University', "short_code": 'KWASU', "institution_type": 'State University', "base_url": 'https://kwasu.edu.ng'},
+    {"name": 'Ladoke Akintola University of Technology', "short_code": 'LAUTECH', "institution_type": 'State University', "base_url": 'https://lautech.edu.ng'},
+    {"name": 'Lagos State University', "short_code": 'LASU', "institution_type": 'State University', "base_url": 'https://lasu.edu.ng'},
+    {"name": 'Nasarawa State University, Keffi', "short_code": 'NSUK', "institution_type": 'State University', "base_url": 'https://nsuk.edu.ng'},
+    {"name": 'Olabisi Onabanjo University', "short_code": 'OOU', "institution_type": 'State University', "base_url": 'https://oouagoiwoye.edu.ng'},
+    {"name": 'Ondo State University of Science and Technology', "short_code": 'OAUSTECH', "institution_type": 'State University', "base_url": 'https://oaustech.edu.ng'},
+    {"name": 'Osu State University (PLASU)', "short_code": 'PLASU', "institution_type": 'State University', "base_url": 'https://plasu.edu.ng'},
+    {"name": 'Rivers State University', "short_code": 'RSU', "institution_type": 'State University', "base_url": 'https://rsu.edu.ng'},
+    {"name": 'Sokoto State University', "short_code": 'SSU', "institution_type": 'State University', "base_url": 'https://ssu.edu.ng'},
+    {"name": 'Taraba State University', "short_code": 'TSU', "institution_type": 'State University', "base_url": 'https://tsuniversity.edu.ng'},
+    {"name": 'Yobe State University', "short_code": 'YSU', "institution_type": 'State University', "base_url": 'https://ysu.edu.ng'},
+    {"name": 'Zamfara State University', "short_code": 'ZAMFARA', "institution_type": 'State University', "base_url": 'https://zamsu.edu.ng'},
+    {"name": 'Kwara State University of Education', "short_code": 'KWASUEDU', "institution_type": 'State University', "base_url": 'https://kwasuedu.edu.ng'},
+    {"name": 'Abdulsalam Abubakar University of Agriculture and Climate Action', "short_code": 'AAUACA', "institution_type": 'State University', "base_url": 'https://aauaca.edu.ng'},
+    {"name": 'Ebonyi State University of ICT, Science and Technology', "short_code": 'EBSUICT', "institution_type": 'State University', "base_url": 'https://ebsuict.edu.ng'},
+    {"name": 'Cross River University of Education and Entrepreneurship', "short_code": 'CRUEE', "institution_type": 'State University', "base_url": 'https://cruee.edu.ng'},
+    {"name": 'Benue State University of Agriculture Science and Technology', "short_code": 'BSUAST', "institution_type": 'State University', "base_url": 'https://bsuast.edu.ng'},
+    {"name": 'University of Aeronautics and Aerospace Engineering Ezza', "short_code": 'UAAE', "institution_type": 'State University', "base_url": 'https://uaae.edu.ng'},
+    {"name": 'University of Innovation, Science and Technology, Omuma', "short_code": 'UIST', "institution_type": 'State University', "base_url": 'https://uist.edu.ng'},
+    {"name": 'Taraba State University of Tropical Agriculture', "short_code": 'TSUAT', "institution_type": 'State University', "base_url": 'https://tsuat.edu.ng'},
+    {"name": 'Jigawa State University of Medical and Allied Health Sciences', "short_code": 'JSUMAHS', "institution_type": 'State University', "base_url": 'https://jsumahs.edu.ng'},
+    {"name": 'Delta University of Science and Technology, Ozoro', "short_code": 'DSUSTOZORO', "institution_type": 'State University', "base_url": 'https://dsust.edu.ng'},
+    {"name": 'Dennis Osadebe University, Asaba', "short_code": 'DOU', "institution_type": 'State University', "base_url": 'https://dou.edu.ng'},
+    {"name": 'Lagos State University of Education', "short_code": 'LASUED', "institution_type": 'State University', "base_url": 'https://lasued.edu.ng'},
+    {"name": 'Lagos State University of Science and Technology', "short_code": 'LASUSTECH', "institution_type": 'State University', "base_url": 'https://lasustech.edu.ng'},
+    {"name": 'Shehu Shagari University of Education', "short_code": 'SSUE', "institution_type": 'State University', "base_url": 'https://ssue.edu.ng'},
+    {"name": 'State University of Medical and Applied Sciences', "short_code": 'SUMAS', "institution_type": 'State University', "base_url": 'https://sumas.edu.ng'},
+    {"name": 'University of Ilesa', "short_code": 'UNILESA', "institution_type": 'State University', "base_url": 'https://unilesa.edu.ng'},
+    {"name": 'Emanuel Alayande University of Education', "short_code": 'EAUED', "institution_type": 'State University', "base_url": 'https://eaued.edu.ng'},
+    {"name": 'Kogi State University, Kabba', "short_code": 'KSUKABBA', "institution_type": 'State University', "base_url": 'https://ksukabba.edu.ng'},
+    {"name": 'Abdulkadir Kure University', "short_code": 'AKU', "institution_type": 'State University', "base_url": 'https://aku.edu.ng'},
+    {"name": 'Kingsley Ozumba Mbadiwe University', "short_code": 'KOMU', "institution_type": 'State University', "base_url": 'https://komu.edu.ng'},
+    {"name": 'University of Africa Toru Orua', "short_code": 'UAT', "institution_type": 'State University', "base_url": 'https://uat.edu.ng'},
+    {"name": 'Kashim Ibrahim University, Maiduguri', "short_code": 'KSU', "institution_type": 'State University', "base_url": 'https://ksu.edu.ng'},
+    {"name": 'Moshood Abiola University of Science and Technology', "short_code": 'MAUSTECH', "institution_type": 'State University', "base_url": 'https://maustech.edu.ng'},
+    {"name": 'Bayelsa Medical University', "short_code": 'BMU', "institution_type": 'State University', "base_url": 'https://bmu.edu.ng'},
+    {"name": 'University of Agriculture and Environmental Sciences', "short_code": 'UAES', "institution_type": 'State University', "base_url": 'https://uaes.edu.ng'},
+    {"name": 'Confluence University of Science and Technology', "short_code": 'CUSTECH', "institution_type": 'State University', "base_url": 'https://custech.edu.ng'},
+    {"name": 'Bamidele Olumilua University of Science and Technology', "short_code": 'BOUESTI', "institution_type": 'State University', "base_url": 'https://bouesti.edu.ng'},
+    {"name": 'University of Delta, Agbor', "short_code": 'UNIDEL', "institution_type": 'State University', "base_url": 'https://unidel.edu.ng'},
+    {"name": 'Babcock University', "short_code": 'BABCOCK', "institution_type": 'Private University', "base_url": 'https://babcock.edu.ng'},
+    {"name": 'Igbinedion University Okada', "short_code": 'IGBINEDION', "institution_type": 'Private University', "base_url": 'https://iuokada.edu.ng'},
+    {"name": 'Madonna University', "short_code": 'MADONNA', "institution_type": 'Private University', "base_url": 'https://madonnauniversity.edu.ng'},
+    {"name": 'Bowen University', "short_code": 'BOWEN', "institution_type": 'Private University', "base_url": 'https://bowen.edu.ng'},
+    {"name": 'Benson Idahosa University', "short_code": 'BIU', "institution_type": 'Private University', "base_url": 'https://biu.edu.ng'},
+    {"name": 'Covenant University', "short_code": 'COVENANT', "institution_type": 'Private University', "base_url": 'https://covenantuniversity.edu.ng'},
+    {"name": 'Pan-Atlantic University', "short_code": 'PAU', "institution_type": 'Private University', "base_url": 'https://pau.edu.ng'},
+    {"name": 'American University of Nigeria', "short_code": 'AUN', "institution_type": 'Private University', "base_url": 'https://aun.edu.ng'},
+    {"name": 'Ajayi Crowther University', "short_code": 'ACU', "institution_type": 'Private University', "base_url": 'https://acu.edu.ng'},
+    {"name": 'Al-Hikmah University', "short_code": 'ALHIKMAH', "institution_type": 'Private University', "base_url": 'https://alhikmah.edu.ng'},
+    {"name": 'Al-Qalam University', "short_code": 'ALQALAM', "institution_type": 'Private University', "base_url": 'https://auk.edu.ng'},
+    {"name": 'Bells University of Technology', "short_code": 'BELLS', "institution_type": 'Private University', "base_url": 'https://bellsuniversity.edu.ng'},
+    {"name": 'Bingham University', "short_code": 'BINGHAM', "institution_type": 'Private University', "base_url": 'https://binghamuni.edu.ng'},
+    {"name": 'Caritas University', "short_code": 'CARITAS', "institution_type": 'Private University', "base_url": 'https://caritasuni.edu.ng'},
+    {"name": 'Crawford University', "short_code": 'CRAWFORD', "institution_type": 'Private University', "base_url": 'https://crawforduniversity.edu.ng'},
+    {"name": 'Crescent University', "short_code": 'CRESCENT', "institution_type": 'Private University', "base_url": 'https://crescent-university.edu.ng'},
+    {"name": 'Kwararafa University', "short_code": 'KWARARAFA', "institution_type": 'Private University', "base_url": 'https://kwararafauniversity.edu.ng'},
+    {"name": 'Lead City University', "short_code": 'LEADCITY', "institution_type": 'Private University', "base_url": 'https://lcu.edu.ng'},
+    {"name": 'Novena University', "short_code": 'NOVENA', "institution_type": 'Private University', "base_url": 'https://novenauniversity.edu.ng'},
+    {"name": 'Renaissance University', "short_code": 'RENAISSANCE', "institution_type": 'Private University', "base_url": 'https://rnu.edu.ng'},
+    {"name": 'University of Mkar', "short_code": 'UNIMKAR', "institution_type": 'Private University', "base_url": 'https://unimkar.edu.ng'},
+    {"name": 'Joseph Ayo Babalola University', "short_code": 'JABU', "institution_type": 'Private University', "base_url": 'https://jabu.edu.ng'},
+    {"name": 'Achievers University', "short_code": 'ACHIEVERS', "institution_type": 'Private University', "base_url": 'https://achievers.edu.ng'},
+    {"name": 'Caleb University', "short_code": 'CALEB', "institution_type": 'Private University', "base_url": 'https://calebuniversity.edu.ng'},
+    {"name": 'Fountain University', "short_code": 'FOUNTAIN', "institution_type": 'Private University', "base_url": 'https://fuo.edu.ng'},
+    {"name": 'African University of Science and Technology', "short_code": 'AUST', "institution_type": 'Private University', "base_url": 'https://aust.edu.ng'},
+    {"name": 'Obong University', "short_code": 'OBONG', "institution_type": 'Private University', "base_url": 'https://obonguniversity.net'},
+    {"name": 'Salem University', "short_code": 'SALEM', "institution_type": 'Private University', "base_url": 'https://salemuniversity.edu.ng'},
+    {"name": 'Tansian University', "short_code": 'TANSIAN', "institution_type": 'Private University', "base_url": 'https://tansianuniversity.edu.ng'},
+    {"name": 'Veritas University', "short_code": 'VERITAS', "institution_type": 'Private University', "base_url": 'https://veritas.edu.ng'},
+    {"name": 'Wesley University', "short_code": 'WESLEY', "institution_type": 'Private University', "base_url": 'https://wesleyuni.edu.ng'},
+    {"name": 'Western Delta University', "short_code": 'WDU', "institution_type": 'Private University', "base_url": 'https://wdu.edu.ng'},
+    {"name": 'Afe Babalola University', "short_code": 'ABUAD', "institution_type": 'Private University', "base_url": 'https://abuad.edu.ng'},
+    {"name": 'Godfrey Okoye University', "short_code": 'GOUNI', "institution_type": 'Private University', "base_url": 'https://gouni.edu.ng'},
+    {"name": 'Nile University of Nigeria', "short_code": 'NILE', "institution_type": 'Private University', "base_url": 'https://nileuniversity.edu.ng'},
+    {"name": 'Oduduwa University', "short_code": 'ODUDUWA', "institution_type": 'Private University', "base_url": 'https://oduduwauniversity.edu.ng'},
+    {"name": 'Paul University', "short_code": 'PAUL', "institution_type": 'Private University', "base_url": 'https://pauluniversity.edu.ng'},
+    {"name": 'Rhema University', "short_code": 'RHEMA', "institution_type": 'Private University', "base_url": 'https://rhemauniversity.edu.ng'},
+    {"name": 'Wellspring University', "short_code": 'WELLSPRING', "institution_type": 'Private University', "base_url": 'https://wellspringuniversity.net'},
+    {"name": 'Adeleke University', "short_code": 'ADELEKE', "institution_type": 'Private University', "base_url": 'https://adelekeuniversity.edu.ng'},
+    {"name": 'Baze University', "short_code": 'BAZE', "institution_type": 'Private University', "base_url": 'https://bazeuniversity.edu.ng'},
+    {"name": 'Landmark University', "short_code": 'LANDMARK', "institution_type": 'Private University', "base_url": 'https://lmu.edu.ng'},
+    {"name": 'Glorious Vision University', "short_code": 'GLORIOUS', "institution_type": 'Private University', "base_url": 'https://sau.edu.ng'},
+    {"name": 'Elizade University', "short_code": 'ELIZADE', "institution_type": 'Private University', "base_url": 'https://elizadeuniversity.edu.ng'},
+    {"name": 'Evangel University', "short_code": 'EVANGEL', "institution_type": 'Private University', "base_url": 'https://evangeluniversity.edu.ng'},
+    {"name": 'Gregory University', "short_code": 'GREGORY', "institution_type": 'Private University', "base_url": 'https://gregoryuniversity.com'},
+    {"name": 'Mcpherson University', "short_code": 'MCPHERSON', "institution_type": 'Private University', "base_url": 'https://mcu.edu.ng'},
+    {"name": 'Southwestern University', "short_code": 'SOUTHWESTERN', "institution_type": 'Private University', "base_url": 'https://southwesternuniversity.edu.ng'},
+    {"name": 'Augustine University', "short_code": 'AUGUSTINE', "institution_type": 'Private University', "base_url": 'https://augustineuniversity.edu.ng'},
+    {"name": 'Chrisland University', "short_code": 'CHRISLAND', "institution_type": 'Private University', "base_url": 'https://chrislanduniversity.edu.ng'},
+    {"name": 'Edwin Clark University', "short_code": 'EDWINCLARK', "institution_type": 'Private University', "base_url": 'https://edwinclarkuniversity.edu.ng'},
+    {"name": 'Hallmark University', "short_code": 'HALLMARK', "institution_type": 'Private University', "base_url": 'https://hallmark.edu.ng'},
+    {"name": 'Hezekiah University', "short_code": 'HEZEKIAH', "institution_type": 'Private University', "base_url": 'https://hezekiah.edu.ng'},
+    {"name": 'Kings University', "short_code": 'KINGS', "institution_type": 'Private University', "base_url": 'https://kingsuniversity.edu.ng'},
+    {"name": 'Micheal & Cecilia Ibru University', "short_code": 'MCIU', "institution_type": 'Private University', "base_url": 'https://mciu.edu.ng'},
+    {"name": 'Mountain Top University', "short_code": 'MOUNTAINTOP', "institution_type": 'Private University', "base_url": 'https://mtu.edu.ng'},
+    {"name": 'Ritman University', "short_code": 'RITMAN', "institution_type": 'Private University', "base_url": 'https://ritmanuniversity.edu.ng'},
+    {"name": 'Summit University', "short_code": 'SUMMIT', "institution_type": 'Private University', "base_url": 'https://summituniversity.edu.ng'},
+    {"name": 'Christopher University', "short_code": 'CHRISTOPHER', "institution_type": 'Private University', "base_url": 'https://christopheruniversity.edu.ng'},
+    {"name": 'Kola Daisi University', "short_code": 'KOLADAISI', "institution_type": 'Private University', "base_url": 'https://koladaisiuniversity.edu.ng'},
+    {"name": 'Anchor University', "short_code": 'ANCHOR', "institution_type": 'Private University', "base_url": 'https://aul.edu.ng'},
+    {"name": 'Dominican University', "short_code": 'DOMINICAN', "institution_type": 'Private University', "base_url": 'https://dui.edu.ng'},
+    {"name": 'Legacy University', "short_code": 'LEGACY', "institution_type": 'Private University', "base_url": 'https://legacyuniversity.edu.ng'},
+    {"name": 'Arthur Jarvis University', "short_code": 'ARTHURJARVIS', "institution_type": 'Private University', "base_url": 'https://arthurjarvisuniversity.edu.ng'},
+    {"name": 'Ojaja University', "short_code": 'OJAJA', "institution_type": 'Private University', "base_url": 'https://crownhilluniversity.edu.ng'},
+    {"name": 'Coal City University', "short_code": 'COALCITY', "institution_type": 'Private University', "base_url": 'https://ccu.edu.ng'},
+    {"name": 'Clifford University', "short_code": 'CLIFFORD', "institution_type": 'Private University', "base_url": 'https://clifforduni.edu.ng'},
+    {"name": 'Spiritan University', "short_code": 'SPIRITAN', "institution_type": 'Private University', "base_url": 'https://spiritanuniversity.edu.ng'},
+    {"name": 'Precious Cornerstone University', "short_code": 'PRECIOUS', "institution_type": 'Private University', "base_url": 'https://pcu.edu.ng'},
+    {"name": 'PAMO University of Medical Sciences', "short_code": 'PAMO', "institution_type": 'Private University', "base_url": 'https://pums.edu.ng'},
+    {"name": 'Atiba University', "short_code": 'ATIBA', "institution_type": 'Private University', "base_url": 'https://atiba.edu.ng'},
+    {"name": 'Eko University of Medical and Health Sciences', "short_code": 'EKOUNIVMED', "institution_type": 'Private University', "base_url": 'https://ekounivmed.edu.ng'},
+    {"name": 'Skyline University', "short_code": 'SKYLINE', "institution_type": 'Private University', "base_url": 'https://sun.edu.ng'},
+    {"name": 'Greenfield University', "short_code": 'GREENFIELD', "institution_type": 'Private University', "base_url": 'https://gfu.edu.ng'},
+    {"name": 'Dominion University', "short_code": 'DOMINION', "institution_type": 'Private University', "base_url": 'https://dominionuniversity.edu.ng'},
+    {"name": 'Trinity University', "short_code": 'TRINITY', "institution_type": 'Private University', "base_url": 'https://trinityuniversity.edu.ng'},
+    {"name": 'Westland University', "short_code": 'WESTLAND', "institution_type": 'Private University', "base_url": 'https://westland.edu.ng'},
+    {"name": 'Topfaith University', "short_code": 'TOPFAITH', "institution_type": 'Private University', "base_url": 'https://topfaith.edu.ng'},
+    {"name": 'Thomas Adewumi University', "short_code": 'THOMASADEWUMI', "institution_type": 'Private University', "base_url": 'https://tau.edu.ng'},
+    {"name": 'Maranatha University', "short_code": 'MARANATHA', "institution_type": 'Private University', "base_url": 'https://maranatha.edu.ng'},
+    {"name": 'Ave Maria University', "short_code": 'AVEMARIA', "institution_type": 'Private University', "base_url": 'https://avemaria.edu.ng'},
+    {"name": 'Al-Istiqama University', "short_code": 'ALISTIQAMA', "institution_type": 'Private University', "base_url": 'https://alistiqama.edu.ng'},
+    {"name": 'Mudiame University', "short_code": 'MUDIAME', "institution_type": 'Private University', "base_url": 'https://mudiame.edu.ng'},
+    {"name": 'Havilla University', "short_code": 'HAVILLA', "institution_type": 'Private University', "base_url": 'https://havillauniversity.edu.ng'},
+    {"name": 'Claretian University of Nigeria', "short_code": 'CLARETIAN', "institution_type": 'Private University', "base_url": 'https://claretian.edu.ng'},
+    {"name": 'Karl-Kumm University', "short_code": 'KARLKUMM', "institution_type": 'Private University', "base_url": 'https://karlkumm.edu.ng'},
+    {"name": 'James Hope University', "short_code": 'JAMESHOPE', "institution_type": 'Private University', "base_url": 'https://jhu.edu.ng'},
+    {"name": 'Maryam Abacha American University of Nigeria', "short_code": 'MAAUN', "institution_type": 'Private University', "base_url": 'https://maau.edu.ng'},
+    {"name": 'Capital City University', "short_code": 'CAPITALCITY', "institution_type": 'Private University', "base_url": 'https://ccuk.edu.ng'},
+    {"name": 'Ahman Pategi University', "short_code": 'AHMANPATIEGI', "institution_type": 'Private University', "base_url": 'https://ahmanpategi.edu.ng'},
+    {"name": 'University of Offa', "short_code": 'UNIOFFA', "institution_type": 'Private University', "base_url": 'https://unioffa.edu.ng'},
+    {"name": 'Mewar International University', "short_code": 'MEWAR', "institution_type": 'Private University', "base_url": 'https://miu.edu.ng'},
+    {"name": 'Edusoko University', "short_code": 'EDUSOKO', "institution_type": 'Private University', "base_url": 'https://edusoko.edu.ng'},
+    {"name": 'Philomath University', "short_code": 'PHILOMATH', "institution_type": 'Private University', "base_url": 'https://philomath.edu.ng'},
+    {"name": 'Anan University', "short_code": 'ANAN', "institution_type": 'Private University', "base_url": 'https://anan.edu.ng'},
+    {"name": 'North Eastern University', "short_code": 'NORTHEASTERN', "institution_type": 'Private University', "base_url": 'https://pru.edu.ng'},
+    {"name": 'Al-Ansar University', "short_code": 'ALANSAR', "institution_type": 'Private University', "base_url": 'https://alansar.edu.ng'},
+    {"name": 'Margaret Lawrence University', "short_code": 'MARGARETLAWRENCE', "institution_type": 'Private University', "base_url": 'https://mlu.edu.ng'},
+    {"name": 'Khalifa Isiyaku Rabiu University', "short_code": 'KHALIFAISIYAKU', "institution_type": 'Private University', "base_url": 'https://kiru.edu.ng'},
+    {"name": 'Sports University', "short_code": 'SPORTS', "institution_type": 'Private University', "base_url": 'https://sportsuniversity.edu.ng'},
+    {"name": 'Saisa University of Medical Sciences and Technology', "short_code": 'SAISA', "institution_type": 'Private University', "base_url": 'https://saisa.edu.ng'},
+    {"name": 'Nigerian British University', "short_code": 'NIGERIANBRITISH', "institution_type": 'Private University', "base_url": 'https://nbu.edu.ng'},
+    {"name": 'Peter University', "short_code": 'PETER', "institution_type": 'Private University', "base_url": 'https://peteruniversity.edu.ng'},
+    {"name": 'Newgate University', "short_code": 'NEWGATE', "institution_type": 'Private University', "base_url": 'https://newgate.edu.ng'},
+    {"name": 'European University of Nigeria', "short_code": 'EUROPEAN', "institution_type": 'Private University', "base_url": 'https://eun.edu.ng'},
+    {"name": 'NorthWest University Sokoto', "short_code": 'NORTHWEST', "institution_type": 'Private University', "base_url": 'https://nwu.edu.ng'},
+    {"name": 'Rayhaan University', "short_code": 'RAYHAAN', "institution_type": 'Private University', "base_url": 'https://rayhaan.edu.ng'},
+    {"name": 'Sam Maris University', "short_code": 'SAMMARIS', "institution_type": 'Private University', "base_url": 'https://sammaris.edu.ng'},
+    {"name": 'Lux Mundi University', "short_code": 'LUXMUNDI', "institution_type": 'Private University', "base_url": 'https://luxmundi.edu.ng'},
+    {"name": 'Maduka University', "short_code": 'MADUKA', "institution_type": 'Private University', "base_url": 'https://madukauniversity.edu.ng'},
+    {"name": 'PeaceLand University', "short_code": 'PEACELAND', "institution_type": 'Private University', "base_url": 'https://peaceland.edu.ng'},
+    {"name": 'Amadeus University', "short_code": 'AMADEUS', "institution_type": 'Private University', "base_url": 'https://amadeus.edu.ng'},
+    {"name": 'Vision University', "short_code": 'VISION', "institution_type": 'Private University', "base_url": 'https://vision.edu.ng'},
+    {"name": 'Azman University', "short_code": 'AZMAN', "institution_type": 'Private University', "base_url": 'https://azman.edu.ng'},
+    {"name": 'Huda University', "short_code": 'HUDA', "institution_type": 'Private University', "base_url": 'https://huda.edu.ng'},
+    {"name": 'Franco British International University', "short_code": 'FRANCOBRITISH', "institution_type": 'Private University', "base_url": 'https://fbiu.edu.ng'},
+    {"name": 'Canadian University of Nigeria', "short_code": 'CANADIAN', "institution_type": 'Private University', "base_url": 'https://cun.edu.ng'},
+    {"name": 'Gerar University of Medical Science', "short_code": 'GERAR', "institution_type": 'Private University', "base_url": 'https://gerar.edu.ng'},
+    {"name": 'British Canadian University', "short_code": 'BRITISHCANADIAN', "institution_type": 'Private University', "base_url": 'https://bcu.edu.ng'},
+    {"name": 'Hensard University', "short_code": 'HENSARD', "institution_type": 'Private University', "base_url": 'https://hensard.edu.ng'},
+    {"name": 'Amaj University', "short_code": 'AMAJ', "institution_type": 'Private University', "base_url": 'https://amaj.edu.ng'},
+    {"name": 'Phoenix University', "short_code": 'PHOENIX', "institution_type": 'Private University', "base_url": 'https://phoenix.edu.ng'},
+    {"name": 'Wigwe University', "short_code": 'WIGWE', "institution_type": 'Private University', "base_url": 'https://wigweuniversity.edu.ng'},
+    {"name": 'Hillside University of Science and Technology', "short_code": 'HILLSIDE', "institution_type": 'Private University', "base_url": 'https://hust.edu.ng'},
+    {"name": 'University on the Niger', "short_code": 'UNIVERSITYONNIGER', "institution_type": 'Private University', "base_url": 'https://uniniger.edu.ng'},
+    {"name": 'Elrazi Medical University Yargaya', "short_code": 'ELRAZI', "institution_type": 'Private University', "base_url": 'https://elrazi.edu.ng'},
+    {"name": 'Venite University', "short_code": 'VENITE', "institution_type": 'Private University', "base_url": 'https://venite.edu.ng'},
+    {"name": 'Shanahan University', "short_code": 'SHANAHAN', "institution_type": 'Private University', "base_url": 'https://shanahan.edu.ng'},
+    {"name": 'The Duke Medical University', "short_code": 'DUKE', "institution_type": 'Private University', "base_url": 'https://duke.edu.ng'},
+    {"name": 'Mercy Medical University', "short_code": 'MERCY', "institution_type": 'Private University', "base_url": 'https://mercy.edu.ng'},
+    {"name": 'Cosmopolitan University Abuja', "short_code": 'COSMOPOLITAN', "institution_type": 'Private University', "base_url": 'https://cosmopolitan.edu.ng'},
+    {"name": 'Miva Open University', "short_code": 'MIVA', "institution_type": 'Private University', "base_url": 'https://miva.university'},
+    {"name": 'Iconic Open University', "short_code": 'ICONIC', "institution_type": 'Private University', "base_url": 'https://iconic.edu.ng'},
+    {"name": 'West Midlands Open University', "short_code": 'WESTMIDLANDS', "institution_type": 'Private University', "base_url": 'https://wmou.edu.ng'},
+    {"name": 'Al-Muhibbah Open University', "short_code": 'ALMUHIBBAH', "institution_type": 'Private University', "base_url": 'https://almuhibbah.edu.ng'},
+    {"name": 'El-Amin University', "short_code": 'ELAMIN', "institution_type": 'Private University', "base_url": 'https://elamin.edu.ng'},
+    {"name": 'College of Petroleum and Energy Studies', "short_code": 'CPES', "institution_type": 'Private University', "base_url": 'https://cpes.edu.ng'},
+    {"name": 'Jewel University', "short_code": 'JEWEL', "institution_type": 'Private University', "base_url": 'https://jewel.edu.ng'},
+    {"name": 'Prime University', "short_code": 'PRIME', "institution_type": 'Private University', "base_url": 'https://prime.edu.ng'},
+    {"name": 'Nigerian University of Technology and Management', "short_code": 'NUTM', "institution_type": 'Private University', "base_url": 'https://nutm.edu.ng'},
+    {"name": 'Al-Bayan University', "short_code": 'ALBAYAN', "institution_type": 'Private University', "base_url": 'https://albayan.edu.ng'},
+    {"name": 'Lighthouse University', "short_code": 'LIGHTHOUSE', "institution_type": 'Private University', "base_url": 'https://lighthouse.edu.ng'},
+    {"name": 'African University of Economics', "short_code": 'AFRICANUNIECON', "institution_type": 'Private University', "base_url": 'https://aue.edu.ng'},
+    {"name": 'New City University', "short_code": 'NEWCITY', "institution_type": 'Private University', "base_url": 'https://newcity.edu.ng'},
+    {"name": 'University of Fortune', "short_code": 'UNIFORTUNE', "institution_type": 'Private University', "base_url": 'https://unifortune.edu.ng'},
+    {"name": 'Eranova University', "short_code": 'ERANOVA', "institution_type": 'Private University', "base_url": 'https://eranova.edu.ng'},
+    {"name": 'Minaret University', "short_code": 'MINARET', "institution_type": 'Private University', "base_url": 'https://minaret.edu.ng'},
+    {"name": 'Southern Atlantic University', "short_code": 'SOUTHERNATLANTIC', "institution_type": 'Private University', "base_url": 'https://sau.edu.ng'},
+    {"name": 'Lens University', "short_code": 'LENS', "institution_type": 'Private University', "base_url": 'https://lens.edu.ng'},
+    {"name": 'Monarch University', "short_code": 'MONARCH', "institution_type": 'Private University', "base_url": 'https://monarch.edu.ng'},
+    {"name": 'Tonine Iredia University of Communication', "short_code": 'TONINEIREDIA', "institution_type": 'Private University', "base_url": 'https://tiuc.edu.ng'},
+    {"name": 'Isaac Balami University of Aeronautics and Management', "short_code": 'ISAACBALAMI', "institution_type": 'Private University', "base_url": 'https://ibu.edu.ng'},
+    {"name": 'Kevin Eze University', "short_code": 'KEVINEZE', "institution_type": 'Private University', "base_url": 'https://kevin.edu.ng'},
+    {"name": 'Tazkiyah University', "short_code": 'TAZKIYAH', "institution_type": 'Private University', "base_url": 'https://tazkiyah.edu.ng'},
+    {"name": 'Leadership University', "short_code": 'LEADERSHIP', "institution_type": 'Private University', "base_url": 'https://leadership.edu.ng'},
+    {"name": 'Bridget University Mbaise', "short_code": 'BRIDGET', "institution_type": 'Private University', "base_url": 'https://bridget.edu.ng'},
+    {"name": 'Greenland University', "short_code": 'GREENLAND', "institution_type": 'Private University', "base_url": 'https://greenland.edu.ng'},
+    {"name": 'JEFAP University', "short_code": 'JEFAP', "institution_type": 'Private University', "base_url": 'https://jefap.edu.ng'},
+    {"name": 'Azione Verde University', "short_code": 'AZIONVERDE', "institution_type": 'Private University', "base_url": 'https://azione.edu.ng'},
+    {"name": 'Unique Open University', "short_code": 'UNIQUEOPEN', "institution_type": 'Private University', "base_url": 'https://unique.edu.ng'},
+    {"name": 'American Open University', "short_code": 'AMERICANOPEN', "institution_type": 'Private University', "base_url": 'https://aou.edu.ng'},
+    {"name": 'Millennium Crest University', "short_code": 'MILLENNIUMCREST', "institution_type": 'Private University', "base_url": 'https://mcu.edu.ng'},
+    {"name": 'Euston University', "short_code": 'EUSTON', "institution_type": 'Private University', "base_url": 'https://euston.edu.ng'},
+    {"name": 'Sani Bello University', "short_code": 'SANIBELLO', "institution_type": 'Private University', "base_url": 'https://sbu.edu.ng'},
+    {"name": 'Godday Erewa University', "short_code": 'GODDAYEREWA', "institution_type": 'Private University', "base_url": 'https://geu.edu.ng'},
+    {"name": 'Owolabi University', "short_code": 'OWOLABI', "institution_type": 'Private University', "base_url": 'https://owolabi.edu.ng'},
+    {"name": 'Regnum Medical University', "short_code": 'REGNUM', "institution_type": 'Private University', "base_url": 'https://regnum.edu.ng'},
+    {"name": 'City University Abuja', "short_code": 'CITYUNIVERSITY', "institution_type": 'Private University', "base_url": 'https://cityuniversity.edu.ng'},
+    {"name": 'Transatlantic University of Medicine and Health Sciences', "short_code": 'TRANSATLANTIC', "institution_type": 'Private University', "base_url": 'https://tumhs.edu.ng'},
+    {"name": 'Maria Assumpta University Owerri', "short_code": 'MARIAASSUMPTA', "institution_type": 'Private University', "base_url": 'https://mau.edu.ng'},
+    {"name": 'High Flyers University', "short_code": 'HIGHFLYERS', "institution_type": 'Private University', "base_url": 'https://hfu.edu.ng'},
+    {"name": 'Ummah University of Nigeria', "short_code": 'UMMAH', "institution_type": 'Private University', "base_url": 'https://ummah.edu.ng'},
+    {"name": 'Pearl University', "short_code": 'PEARL', "institution_type": 'Private University', "base_url": 'https://pearl.edu.ng'},
+    {"name": 'Omega University Kaduna', "short_code": 'OMEGA', "institution_type": 'Private University', "base_url": 'https://omega.edu.ng'},
+    {"name": 'Yaba College of Technology', "short_code": 'YABATECH', "institution_type": 'Polytechnic', "base_url": 'https://yabatech.edu.ng'},
+    {"name": 'Federal Polytechnic, Ilaro', "short_code": 'ILAROPOLY', "institution_type": 'Polytechnic', "base_url": 'https://federalpolyilaro.edu.ng'},
+    {"name": 'Federal Polytechnic, Offa', "short_code": 'OFFAPOLY', "institution_type": 'Polytechnic', "base_url": 'https://fedpoffaonline.edu.ng'},
+    {"name": 'Auchi Polytechnic', "short_code": 'AUCHIPOLY', "institution_type": 'Polytechnic', "base_url": 'https://auchipoly.edu.ng'},
+    {"name": 'Kaduna Polytechnic', "short_code": 'KADPOLY', "institution_type": 'Polytechnic', "base_url": 'https://kadpoly.edu.ng'},
+    {"name": 'Lagos State Polytechnic', "short_code": 'LASPOTECH', "institution_type": 'Polytechnic', "base_url": 'https://mylaspotech.edu.ng'},
+    {"name": 'Moshood Abiola Polytechnic', "short_code": 'MAPOLY', "institution_type": 'Polytechnic', "base_url": 'https://mapoly.edu.ng'},
+    {"name": 'The Polytechnic, Ibadan', "short_code": 'POLYIBADAN', "institution_type": 'Polytechnic', "base_url": 'https://polyibadan.edu.ng'},
 ]
 
 
@@ -254,7 +556,7 @@ def extract_date_from_page(url: str):
     """Fetch a page and try to extract the publication date."""
     try:
         headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
-        r = requests.get(url, headers=headers, timeout=8)
+        r = requests.get(url, headers=headers, timeout=5)
         if r.status_code != 200:
             return None
         soup = BeautifulSoup(r.text, "html.parser")
@@ -297,7 +599,7 @@ def extract_image_from_page(url: str) -> str:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ScuttleBot/2.0"
         }
-        r = requests.get(url, headers=headers, timeout=8)
+        r = requests.get(url, headers=headers, timeout=5)
         if r.status_code != 200:
             return ""
 
@@ -459,22 +761,80 @@ def scrape_html_institution(uni_id, base_url, uni_name):
 
 @celery_app.task(name="main.run_all_scrapers_and_jamb")
 def run_all_scrapers_and_jamb():
+    """BATCH_SCRAPER_V2 — scan all universities in small batches."""
+    import time as _time
+
     db = SessionLocal()
     try:
-        insts = db.query(UniversityModel).filter(UniversityModel.is_active == True).all()
-        logger.info(f"Starting scraper for {len(insts)} institutions...")
-        for inst in insts:
-            if inst.short_code == "JAMB":
-                scrape_html_institution(str(inst.id), inst.base_url, inst.name)
-            else:
-                if not scrape_wordpress_institution(str(inst.id), inst.base_url, inst.name):
-                    scrape_html_institution(str(inst.id), inst.base_url, inst.name)
+        all_insts = db.query(UniversityModel).filter(UniversityModel.is_active == True).all()
+        logger.info(f"🚀 Scraper starting for {len(all_insts)} universities...")
+
+        # BATCH_SCRAPER_V2 — chunk into groups of 20, sleep between batches
+        BATCH_SIZE = 20
+        batch_delay = 2  # seconds between batches
+        succeeded, failed = 0, 0
+        failed_codes = []
+
+        for i in range(0, len(all_insts), BATCH_SIZE):
+            batch = all_insts[i : i + BATCH_SIZE]
+            logger.info(f"📦 Batch {i // BATCH_SIZE + 1}: {len(batch)} universities")
+
+            for inst in batch:
+                try:
+                    if inst.short_code == "JAMB":
+                        scrape_html_institution(str(inst.id), inst.base_url, inst.name)
+                    else:
+                        ok = scrape_wordpress_institution(str(inst.id), inst.base_url, inst.name)
+                        if not ok:
+                            scrape_html_institution(str(inst.id), inst.base_url, inst.name)
+
+                    # HEALTH_TRACKING_V2
+                    inst.last_scraped_at = datetime.utcnow()
+                    inst.last_scrape_status = "ok"
+                    inst.last_scrape_error = None
+                    inst.consecutive_failures = "0"
+                    db.commit()
+                    succeeded += 1
+                    logger.info(f"  ✅ {inst.short_code}")
+                except Exception as inst_err:
+                    inst.last_scrape_status = "failed"
+                    inst.last_scrape_error = str(inst_err)[:500]
+                    try:
+                        failures = int(inst.consecutive_failures or 0) + 1
+                        inst.consecutive_failures = str(failures)
+                    except (ValueError, TypeError):
+                        inst.consecutive_failures = "1"
+                    db.commit()
+                    failed += 1
+                    failed_codes.append(inst.short_code)
+                    logger.warning(f"  ❌ {inst.short_code}: {str(inst_err)[:80]}")
+
+            # Sleep between batches so we don't hammer servers
+            if i + BATCH_SIZE < len(all_insts):
+                logger.info(f"⏸️  Sleeping {batch_delay}s before next batch...")
+                _time.sleep(batch_delay)
+
+        logger.info(f"🎉 Scrape complete: {succeeded} ✅ / {failed} ❌")
+        if failed_codes:
+            logger.info(f"   Failed: {', '.join(failed_codes[:20])}")
+
+        # Alert if too many failures
+        if failed >= 5 and failed > succeeded:
+            try:
+                send_failure_alert(
+                    "run_all_scrapers_and_jamb",
+                    f"{failed} of {len(all_insts)} failed. First: {', '.join(failed_codes[:5])}"
+                )
+            except Exception:
+                pass
     except Exception as e:
-        logger.error(f"Scrape task error: {e}")
+        logger.error(f"Scraper crashed: {e}")
+        try:
+            send_failure_alert("run_all_scrapers_and_jamb", str(e))
+        except Exception:
+            pass
     finally:
         db.close()
-
-
 
 
 # ==================== Digest Tasks ====================
@@ -953,6 +1313,39 @@ def unsubscribe(token: str = Query(...)):
         "status": "success" if updated else "not_found",
         "message": "You've been unsubscribed from Scuttle.io emails." if updated else "Token not recognized.",
     }
+
+
+
+
+# ==================== University Health Dashboard ====================
+
+@app.get("/api/v1/admin/health", tags=["Admin"])
+def university_health(db: Session = Depends(get_db)):
+    """Show scraper health for every university."""
+    unis = db.query(UniversityModel).order_by(UniversityModel.short_code).all()
+
+    # Announcement counts per university
+    from sqlalchemy import func as _func
+    counts = dict(
+        db.query(AnnouncementModel.university_id, _func.count(AnnouncementModel.id))
+        .group_by(AnnouncementModel.university_id)
+        .all()
+    )
+
+    return [
+        {
+            "short_code": u.short_code,
+            "name": u.name,
+            "type": u.institution_type,
+            "base_url": u.base_url,
+            "announcements": counts.get(u.id, 0),
+            "last_scraped_at": u.last_scraped_at.isoformat() if u.last_scraped_at else None,
+            "status": u.last_scrape_status or "unknown",
+            "error": u.last_scrape_error,
+            "failures": int(u.consecutive_failures or 0),
+        }
+        for u in unis
+    ]
 
 
 @app.get("/", tags=["Health Check"])
