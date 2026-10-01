@@ -553,7 +553,7 @@ def is_too_old(date_obj, max_age_months: int = 6):
 
 
 def extract_date_from_page(url: str):
-    """Fetch a page and try to extract the publication date."""
+    """Fetch a page and try to extract the publication date. IMPROVED_DATE_SCAN_V3"""
     try:
         headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
         r = requests.get(url, headers=headers, timeout=5)
@@ -561,37 +561,74 @@ def extract_date_from_page(url: str):
             return None
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # 1. Meta tags (most reliable)
-        for prop in ["article:published_time", "og:published_time", "datePublished"]:
-            meta = soup.find("meta", property=prop) or soup.find("meta", attrs={"name": prop})
+        # 1. Meta tags — check many variants
+        meta_variants = [
+            ("property", "article:published_time"),
+            ("property", "og:published_time"),
+            ("property", "og:updated_time"),
+            ("name", "article:published_time"),
+            ("name", "datePublished"),
+            ("name", "publishdate"),
+            ("name", "pubdate"),
+            ("name", "date"),
+            ("itemprop", "datePublished"),
+            ("itemprop", "dateModified"),
+        ]
+        for attr, val in meta_variants:
+            meta = soup.find("meta", attrs={attr: val})
             if meta and meta.get("content"):
                 try:
                     return _dt.fromisoformat(meta["content"][:19].replace("Z", ""))
                 except Exception:
-                    pass
+                    d = extract_date_from_text(meta["content"])
+                    if d:
+                        return d
 
-        # 2. <time> tags
+        # 2. <time> tags anywhere
         for t in soup.find_all("time"):
             dt_attr = t.get("datetime")
             if dt_attr:
                 try:
                     return _dt.fromisoformat(dt_attr[:19].replace("Z", ""))
                 except Exception:
-                    pass
+                    d = extract_date_from_text(dt_attr)
+                    if d:
+                        return d
             text_date = extract_date_from_text(t.get_text())
             if text_date:
                 return text_date
 
-        # 3. Fallback: scan the body text
+        # 3. Common date CSS classes
+        date_classes = [
+            "date", "post-date", "entry-date", "published", "post-meta",
+            "meta-date", "post__date", "article-date", "card-date",
+            "wp-block-post-date", "posted-on", "timestamp", "post-date-2",
+            "single-post-date", "news-date", "pub-date", "date-published",
+        ]
+        for cls in date_classes:
+            node = soup.find(class_=cls)
+            if node:
+                d = extract_date_from_text(node.get_text())
+                if d:
+                    return d
+
+        # 4. Fallback: scan top of article
         body = soup.find("article") or soup.find("main") or soup.body
         if body:
-            return extract_date_from_text(body.get_text())
+            text = body.get_text()
+            d = extract_date_from_text(text[:5000])
+            if d:
+                return d
+
+        # 5. URL year hints
+        for y in ["2020", "2021", "2022", "2023", "2024", "2025", "2026"]:
+            if f"/{y}/" in url or f"-{y}-" in url or f"_{y}_" in url:
+                return _dt(int(y), 1, 1)
 
         return None
     except Exception as e:
         logger.debug(f"Date extraction failed for {url}: {e}")
         return None
-
 
 def extract_image_from_page(url: str) -> str:
     """Fetch a page and extract the best hero image (og:image preferred)."""
