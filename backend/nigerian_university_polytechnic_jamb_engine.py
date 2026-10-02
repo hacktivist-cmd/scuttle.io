@@ -69,9 +69,10 @@ celery_app.conf.timezone = "Africa/Lagos"
 # ==================== Beat Schedule ====================
 celery_app.conf.beat_schedule = {
     # Scrape every 30 minutes — most aggressive, best for real-time feel
+    # SCHEDULE_15MIN_V1 — 15 min feels more live
     "scrape-all-institutions": {
         "task": "main.run_all_scrapers_and_jamb",
-        "schedule": crontab(minute="*/30"),
+        "schedule": crontab(minute="*/15"),
     },
     # Daily digest at 8 AM Lagos
     "send-daily-digests": {
@@ -1523,7 +1524,7 @@ def run_all_scrapers_and_jamb():
         # SMART_REFRESH_V1 — only re-scrape if it's been 1+ hours
         from datetime import timedelta as _td
 
-        cutoff = datetime.utcnow() - _td(hours=1)
+        cutoff = datetime.utcnow() - _td(minutes=45)
         all_insts = db.query(UniversityModel).filter(
             UniversityModel.is_active == True,
             ((UniversityModel.last_scraped_at == None) | (UniversityModel.last_scraped_at < cutoff))
@@ -1547,12 +1548,11 @@ def run_all_scrapers_and_jamb():
 
             for inst in batch:
                 try:
+                    # SCHEDULER_MULTIPATH_V1 — use the good scrapers
                     if inst.short_code == "JAMB":
                         scrape_html_institution(str(inst.id), inst.base_url, inst.name)
                     else:
-                        ok = scrape_wordpress_institution(str(inst.id), inst.base_url, inst.name)
-                        if not ok:
-                            scrape_html_institution(str(inst.id), inst.base_url, inst.name)
+                        scrape_multipath_institution(str(inst.id), inst.base_url, inst.name)
 
                     # HEALTH_TRACKING_V2
                     inst.last_scraped_at = datetime.utcnow()
@@ -1860,22 +1860,38 @@ def send_subscription(payload: _SubscriptionPayload):
 
 @app.post("/api/v1/send-newsletter", tags=["Newsletter"])
 def send_newsletter(payload: _NewsletterPayload):
-    """Queue a newsletter broadcast (email + optional WhatsApp)."""
-    # For now, log it. In production, plug in SendGrid/Resend/Postmark.
+    """NEWSLETTER_REAL_V1 — queue the newsletter for actual Gmail sending."""
+    if not payload.recipients:
+        return {"status": "error", "message": "No recipients"}
+
     logger.info(f"📬 Newsletter queued: '{payload.subject}' → {len(payload.recipients)} recipients")
 
-    for r in payload.recipients[:5]:
-        logger.info(f"   → {r.email}")
-
-    if len(payload.recipients) > 5:
-        logger.info(f"   → ... and {len(payload.recipients) - 5} more")
-
-    return {
-        "status": "queued",
-        "subject": payload.subject,
-        "recipients": len(payload.recipients),
-    }
-
+    # Try Celery (async); fall back to sync send if Celery is unavailable
+    try:
+        send_newsletter_task.delay(
+            [{"email": r.email, "name": r.name} for r in payload.recipients],
+            payload.subject,
+            payload.message,
+        )
+        return {
+            "status": "queued",
+            "subject": payload.subject,
+            "recipients": len(payload.recipients),
+        }
+    except Exception as e:
+        logger.warning(f"Celery unavailable, sending sync: {e}")
+        from app.services.email_service import send_bulk
+        result = send_bulk(
+            [{"email": r.email, "name": r.name} for r in payload.recipients],
+            payload.subject,
+            payload.message,
+        )
+        return {
+            "status": "sent",
+            "subject": payload.subject,
+            "recipients": len(payload.recipients),
+            "result": result,
+        }
 
 
 
@@ -2521,3 +2537,10 @@ def health_check():
         "service": "Scuttle.io Engine",
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+
+# HEAD_HEALTHCHECK_V1 — UptimeRobot & monitoring services use HEAD
+@app.head("/", tags=["Health Check"])
+def health_check_head():
+    from fastapi import Response
+    return Response(status_code=200)
