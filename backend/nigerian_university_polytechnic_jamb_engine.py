@@ -1469,6 +1469,22 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
             })
         except Exception as push_err:
             logger.warning(f"Push notification skipped: {push_err}")
+
+        # AUTO_NEWSLETTER_WIRED_V1 — email users whose preferences match
+        try:
+            from app.services.auto_newsletter import notify_matching_users_from_firestore
+            notify_matching_users_from_firestore({
+                "university_name": uni.name,
+                "university_code": uni.short_code,
+                "category": category,
+                "title": title,
+                "summary": summary or "",
+                "source_url": source_url,
+                "image_url": image_url or "",
+                "pdf_extracted_text": pdf_text or "",
+            })
+        except Exception as nl_err:
+            logger.warning(f"Auto-newsletter skipped: {nl_err}")
     except Exception as e:
         db.rollback()
         logger.error(f"Ingest error: {e}")
