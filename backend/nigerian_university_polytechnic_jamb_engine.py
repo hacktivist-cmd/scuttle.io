@@ -2496,14 +2496,20 @@ def trigger_force_scrape():
 
 @app.post("/api/v1/admin/sync-firestore-async", tags=["Admin"])
 def sync_firestore_async_http():
-    """Trigger the sync in background via Celery."""
-    sync_firestore_async.delay()
-    return {"status": "queued", "message": "Sync task dispatched to Celery"}
+    """Run firestore sync in background thread (no Celery)."""
+    import threading
+
+    def _run():
+        try:
+            logger.info("🔄 Sync task started")
+            sync_firestore_async()
+        except Exception as e:
+            logger.error(f"Sync failed: {e}")
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "queued", "message": "Sync task started in background"}
 
 
-
-
-# ==================== URL Sync Endpoint ====================
 
 @app.post("/api/v1/admin/sync-urls", tags=["Admin"])
 def sync_urls_from_seed(db: Session = Depends(get_db)):
