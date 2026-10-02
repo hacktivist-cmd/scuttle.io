@@ -1,7 +1,10 @@
 """
-Scuttle.io Email Service — v3
-Real SVG icons, premium design, warm copy.
-Brevo HTTP API primary, Gmail SMTP fallback.
+Beautiful, Apple-inspired email templates for Scuttle.io
+- Base wrapper with header + footer
+- Templates: welcome, announcement, newsletter, digest, subscription
+- Rich HTML/CSS with gradient heroes, category badges, and CTAs
+- Anti-spam headers + List-Unsubscribe
+- Brevo HTTP API (primary) + Gmail SMTP fallback
 """
 import os
 import logging
@@ -32,7 +35,6 @@ BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "Scuttle.io")
 
 SITE_URL = os.getenv("SITE_URL", "https://scuttle-io.netlify.app")
 LOGO_URL = f"{SITE_URL}/logo.png"
-ICONS_BASE = f"{SITE_URL}/email-icons"
 API_URL = os.getenv("VITE_API_URL", "https://scuttle-api.onrender.com")
 
 # ══════════════════════════════════════════════════════════
@@ -45,6 +47,7 @@ COLORS = {
     "dark": "#1D1D1F",
     "gray": "#86868B",
     "blue": "#0071E3",
+    "blue_dark": "#0051A0",
     "purple": "#9333EA",
     "green": "#16A34A",
     "amber": "#D97706",
@@ -54,23 +57,19 @@ COLORS = {
     "border_soft": "#F3F4F6",
 }
 
-CATEGORY_META = {
-    "Post-UTME":         {"icon": "post-utme.svg",      "bg": "#EFF6FF", "fg": "#0071E3", "gradient": "linear-gradient(135deg,#0071E3 0%,#0051A0 100%)"},
-    "Admission List":    {"icon": "admission-list.svg",  "bg": "#F0FDF4", "fg": "#16A34A", "gradient": "linear-gradient(135deg,#16A34A 0%,#059669 100%)"},
-    "JAMB CAPS":         {"icon": "jamb-caps.svg",       "bg": "#FAF5FF", "fg": "#9333EA", "gradient": "linear-gradient(135deg,#9333EA 0%,#7E22CE 100%)"},
-    "School Fees":       {"icon": "school-fees.svg",     "bg": "#FFFBEB", "fg": "#D97706", "gradient": "linear-gradient(135deg,#D97706 0%,#B45309 100%)"},
-    "JAMB Registration": {"icon": "jamb-reg.svg",        "bg": "#EEF2FF", "fg": "#4F46E5", "gradient": "linear-gradient(135deg,#4F46E5 0%,#4338CA 100%)"},
-    "Academic Calendar": {"icon": "calendar.svg",        "bg": "#FFF1F2", "fg": "#E11D48", "gradient": "linear-gradient(135deg,#E11D48 0%,#BE123C 100%)"},
-    "General News":      {"icon": "news.svg",            "bg": "#F3F4F6", "fg": "#6B7280", "gradient": "linear-gradient(135deg,#6B7280 0%,#4B5563 100%)"},
+# Category → gradient + emoji + label
+CATEGORY_STYLES = {
+    "Post-UTME":         ("📝", "#EFF6FF", "#0071E3", "linear-gradient(135deg,#0071E3,#0051A0)"),
+    "Admission List":    ("🎓", "#F0FDF4", "#16A34A", "linear-gradient(135deg,#16A34A,#059669)"),
+    "JAMB CAPS":         ("📊", "#FAF5FF", "#9333EA", "linear-gradient(135deg,#9333EA,#7E22CE)"),
+    "School Fees":       ("💰", "#FFFBEB", "#D97706", "linear-gradient(135deg,#D97706,#B45309)"),
+    "JAMB Registration": ("📋", "#EEF2FF", "#4F46E5", "linear-gradient(135deg,#4F46E5,#4338CA)"),
+    "Academic Calendar": ("📅", "#FFF1F2", "#E11D48", "linear-gradient(135deg,#E11D48,#BE123C)"),
+    "General News":      ("📰", "#F3F4F6", "#6B7280", "linear-gradient(135deg,#6B7280,#4B5563)"),
 }
 
 FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
-
-def _cat(cat):
-    return CATEGORY_META.get(cat, CATEGORY_META["General News"])
-
-def _icon_url(name):
-    return f"{ICONS_BASE}/{name}"
+MONO_STACK = "ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace"
 
 # ══════════════════════════════════════════════════════════
 #  HELPERS
@@ -80,14 +79,25 @@ def _make_unsub_token(email: str) -> str:
     secret = os.getenv("GMAIL_APP_PASSWORD", "default-secret")[:16]
     return _hashlib.sha256(f"{email}:{secret}".encode()).hexdigest()[:32]
 
+
 def _is_configured() -> bool:
     return bool(GMAIL_USER and GMAIL_APP_PASSWORD and len(GMAIL_APP_PASSWORD) >= 16)
 
+
 def _escape(s: str) -> str:
+    """Basic HTML escape for user content."""
     if not s:
         return ""
-    return (str(s).replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace('"', "&quot;"))
+    return (
+        str(s).replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _category_style(cat: str):
+    return CATEGORY_STYLES.get(cat, CATEGORY_STYLES["General News"])
 
 # ══════════════════════════════════════════════════════════
 #  SHARED PARTIALS
@@ -96,22 +106,22 @@ def _escape(s: str) -> str:
 def _header_html() -> str:
     return f"""
     <tr>
-      <td align="center" style="padding:40px 24px 32px;">
+      <td align="center" style="padding:36px 24px 28px;">
         <table cellpadding="0" cellspacing="0" border="0" role="presentation">
           <tr>
             <td align="center" style="padding:0;">
               <a href="{SITE_URL}" style="text-decoration:none;display:block;">
-                <img src="{LOGO_URL}" alt="Scuttle.io" width="76" height="76" style="display:block;width:76px;height:76px;border-radius:22px;background:#ffffff;border:1px solid {COLORS['border']};object-fit:contain;box-shadow:0 12px 28px rgba(0,0,0,0.10);" />
+                <img src="{LOGO_URL}" alt="Scuttle.io" width="72" height="72" style="display:block;width:72px;height:72px;border-radius:20px;background:#ffffff;border:1px solid {COLORS['border']};object-fit:contain;box-shadow:0 8px 24px rgba(0,0,0,0.08);" />
               </a>
             </td>
           </tr>
           <tr>
-            <td align="center" style="padding:18px 0 0;font-family:{FONT_STACK};font-size:22px;font-weight:700;color:{COLORS['dark']};letter-spacing:-0.5px;">
+            <td align="center" style="padding:16px 0 0;font-family:{FONT_STACK};font-size:20px;font-weight:700;color:{COLORS['dark']};letter-spacing:-0.4px;">
               <a href="{SITE_URL}" style="color:{COLORS['dark']};text-decoration:none;">Scuttle.io</a>
             </td>
           </tr>
           <tr>
-            <td align="center" style="padding:5px 0 0;font-family:{FONT_STACK};font-size:11px;font-weight:600;color:{COLORS['gray']};letter-spacing:1.2px;text-transform:uppercase;">
+            <td align="center" style="padding:4px 0 0;font-family:{FONT_STACK};font-size:12px;font-weight:500;color:{COLORS['gray']};letter-spacing:0.4px;text-transform:uppercase;">
               Live Nigerian University Updates
             </td>
           </tr>
@@ -119,6 +129,7 @@ def _header_html() -> str:
       </td>
     </tr>
     """
+
 
 def _footer_html(recipient_email: str = "") -> str:
     token = _make_unsub_token(recipient_email) if recipient_email else ""
@@ -130,12 +141,22 @@ def _footer_html(recipient_email: str = "") -> str:
       <td align="center" style="padding:0 24px;">
         <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="max-width:600px;margin:0 auto;">
           <tr>
-            <td align="center" style="padding:36px 0 20px;">
+            <td align="center" style="padding:32px 0 24px;">
               <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                 <tr>
-                  <td style="padding:0 6px;">
-                    <a href="{SITE_URL}" style="display:block;text-decoration:none;">
-                      <img src="{_icon_url('globe.svg') if False else f'{SITE_URL}/email-icons/globe.svg'}" width="34" height="34" alt="Website" style="display:block;border-radius:10px;" onerror="this.style.display='none'" />
+                  <td style="padding:0 8px;">
+                    <a href="{SITE_URL}" style="display:inline-block;width:36px;height:36px;background:#FFFFFF;border-radius:10px;text-decoration:none;border:1px solid {COLORS['border']};">
+                      <span style="display:block;line-height:36px;text-align:center;font-size:18px;">🌐</span>
+                    </a>
+                  </td>
+                  <td style="padding:0 8px;">
+                    <a href="https://whatsapp.com" style="display:inline-block;width:36px;height:36px;background:#25D366;border-radius:10px;text-decoration:none;">
+                      <span style="display:block;line-height:36px;text-align:center;font-size:18px;">💬</span>
+                    </a>
+                  </td>
+                  <td style="padding:0 8px;">
+                    <a href="{SITE_URL}/universities" style="display:inline-block;width:36px;height:36px;background:#FFFFFF;border-radius:10px;text-decoration:none;border:1px solid {COLORS['border']};">
+                      <span style="display:block;line-height:36px;text-align:center;font-size:18px;">🎓</span>
                     </a>
                   </td>
                 </tr>
@@ -143,18 +164,14 @@ def _footer_html(recipient_email: str = "") -> str:
             </td>
           </tr>
           <tr>
-            <td align="center" style="padding:0 0 12px;">
-              <p style="margin:0 0 4px;font-family:{FONT_STACK};font-size:14px;font-weight:700;color:{COLORS['dark']};">
-                Scuttle.io
-              </p>
-              <p style="margin:0;font-family:{FONT_STACK};font-size:12px;color:{COLORS['gray']};">
-                Real-time admission intelligence for Nigerian students
-              </p>
+            <td align="center" style="font-family:{FONT_STACK};font-size:13px;line-height:1.6;color:{COLORS['gray']};">
+              <p style="margin:0 0 6px;font-weight:600;color:{COLORS['dark']};font-size:14px;">Scuttle.io</p>
+              <p style="margin:0 0 16px;">Real-time Nigerian university admission intelligence</p>
             </td>
           </tr>
           <tr>
-            <td align="center" style="padding:16px 0 12px;">
-              <a href="{prefs_url}" style="font-family:{FONT_STACK};font-size:12px;color:{COLORS['gray']};text-decoration:underline;margin:0 8px;">Preferences</a>
+            <td align="center" style="padding:0 0 12px;">
+              <a href="{prefs_url}" style="font-family:{FONT_STACK};font-size:12px;color:{COLORS['gray']};text-decoration:underline;margin:0 8px;">Manage preferences</a>
               <span style="color:{COLORS['border']};">·</span>
               <a href="{unsub_url}" style="font-family:{FONT_STACK};font-size:12px;color:{COLORS['gray']};text-decoration:underline;margin:0 8px;">Unsubscribe</a>
               <span style="color:{COLORS['border']};">·</span>
@@ -162,7 +179,7 @@ def _footer_html(recipient_email: str = "") -> str:
             </td>
           </tr>
           <tr>
-            <td align="center" style="padding:0 0 40px;font-family:{FONT_STACK};font-size:11px;color:#A1A1A6;line-height:1.5;">
+            <td align="center" style="padding:8px 0 40px;font-family:{FONT_STACK};font-size:11px;color:#A1A1A6;line-height:1.5;">
               You're receiving this because you subscribed to Scuttle.io updates.<br>
               © 2026 DARKGRID_AUTOMATION · Built for Nigerian students
             </td>
@@ -172,6 +189,7 @@ def _footer_html(recipient_email: str = "") -> str:
     </tr>
     """
 
+
 def _wrap(inner: str, preheader: str = "", recipient_email: str = "") -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -180,6 +198,7 @@ def _wrap(inner: str, preheader: str = "", recipient_email: str = "") -> str:
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="x-apple-disable-message-reformatting" />
   <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
   <title>Scuttle.io</title>
 </head>
 <body style="margin:0;padding:0;background:{COLORS['bg']};width:100%;-webkit-font-smoothing:antialiased;">
@@ -198,19 +217,8 @@ def _wrap(inner: str, preheader: str = "", recipient_email: str = "") -> str:
 </body>
 </html>"""
 
-def _icon_badge(icon_name: str, size: int = 56, bg: str = "#EFF6FF", radius: int = 14) -> str:
-    """Inline icon badge — image inside colored rounded rect."""
-    return f"""
-    <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="display:inline-block;">
-      <tr>
-        <td style="background:{bg};border-radius:{radius}px;padding:14px;line-height:0;">
-          <img src="{_icon_url(icon_name)}" width="{size - 28}" height="{size - 28}" alt="" style="display:block;width:{size-28}px;height:{size-28}px;" />
-        </td>
-      </tr>
-    </table>"""
-
 # ══════════════════════════════════════════════════════════
-#  TEMPLATE 1 — WELCOME
+#  TEMPLATE 1 — WELCOME EMAIL
 # ══════════════════════════════════════════════════════════
 
 def _render_welcome(recipient_name: str, recipient_email: str = "") -> str:
@@ -223,49 +231,40 @@ def _render_welcome(recipient_name: str, recipient_email: str = "") -> str:
 
           <!-- Hero -->
           <tr>
-            <td style="background:linear-gradient(135deg,#0071E3 0%,#9333EA 100%);padding:52px 36px 48px;text-align:center;">
-              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto 20px;">
-                <tr>
-                  <td style="background:rgba(255,255,255,0.2);border-radius:9999px;padding:8px 18px;font-family:{FONT_STACK};font-size:11px;font-weight:700;color:#FFFFFF;letter-spacing:1.4px;text-transform:uppercase;">
-                    Welcome Aboard
-                  </td>
-                </tr>
-              </table>
-              <h1 style="margin:0 0 14px;font-family:{FONT_STACK};font-size:34px;font-weight:700;color:#FFFFFF;letter-spacing:-0.8px;line-height:1.2;">
-                Hi {_escape(name)},
+            <td style="background:linear-gradient(135deg,#0071E3 0%,#9333EA 100%);padding:48px 36px 44px;text-align:center;position:relative;">
+              <div style="display:inline-block;padding:8px 16px;border-radius:9999px;background:rgba(255,255,255,0.2);backdrop-filter:blur(10px);font-family:{FONT_STACK};font-size:11px;font-weight:700;color:#FFFFFF;letter-spacing:1px;text-transform:uppercase;margin-bottom:20px;">
+                🚀 You're in
+              </div>
+              <h1 style="margin:0 0 12px;font-family:{FONT_STACK};font-size:34px;font-weight:700;color:#FFFFFF;letter-spacing:-0.8px;line-height:1.2;">
+                Welcome to Scuttle.io, {_escape(name)}!
               </h1>
-              <p style="margin:0;font-family:{FONT_STACK};font-size:16px;font-weight:400;color:rgba(255,255,255,0.92);line-height:1.6;">
-                You're now part of a community of Nigerian students<br>who never miss an admission update.
+              <p style="margin:0;font-family:{FONT_STACK};font-size:16px;font-weight:400;color:rgba(255,255,255,0.9);line-height:1.6;">
+                You'll never miss another admission update.
               </p>
             </td>
           </tr>
 
-          <!-- Intro text -->
+          <!-- Features -->
           <tr>
             <td style="padding:40px 36px 8px;">
-              <p style="margin:0;font-family:{FONT_STACK};font-size:15px;color:#4B5563;line-height:1.7;">
-                Here's what you can do with Scuttle:
-              </p>
+              <p style="margin:0 0 8px;font-family:{FONT_STACK};font-size:13px;font-weight:700;color:{COLORS['gray']};letter-spacing:1px;text-transform:uppercase;">Here's what you can do</p>
             </td>
           </tr>
 
-          <!-- Feature list -->
           <tr>
-            <td style="padding:12px 36px 8px;">
+            <td style="padding:0 36px;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
 
                 <tr>
-                  <td style="padding:16px 0;border-bottom:1px solid {COLORS['border_soft']};">
+                  <td style="padding:14px 0;border-bottom:1px solid {COLORS['border_soft']};">
                     <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                       <tr>
-                        <td width="60" valign="middle">
-                          <div style="width:48px;height:48px;background:#EFF6FF;border-radius:14px;line-height:0;">
-                            <img src="{_icon_url('graduation.svg')}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;" />
-                          </div>
+                        <td width="52" valign="top">
+                          <div style="width:44px;height:44px;background:#EFF6FF;border-radius:12px;line-height:44px;text-align:center;font-size:20px;">🎓</div>
                         </td>
-                        <td valign="middle" style="padding-left:16px;font-family:{FONT_STACK};">
-                          <p style="margin:0 0 3px;font-size:15px;font-weight:600;color:{COLORS['dark']};">Follow your universities</p>
-                          <p style="margin:0;font-size:14px;color:{COLORS['gray']};line-height:1.5;">Track 315+ Federal, State & Private institutions</p>
+                        <td valign="middle" style="padding-left:14px;font-family:{FONT_STACK};">
+                          <p style="margin:0 0 2px;font-size:15px;font-weight:600;color:{COLORS['dark']};">Follow your universities</p>
+                          <p style="margin:0;font-size:14px;color:{COLORS['gray']};line-height:1.5;">Track 200+ Federal, State & Private institutions</p>
                         </td>
                       </tr>
                     </table>
@@ -273,16 +272,14 @@ def _render_welcome(recipient_name: str, recipient_email: str = "") -> str:
                 </tr>
 
                 <tr>
-                  <td style="padding:16px 0;border-bottom:1px solid {COLORS['border_soft']};">
+                  <td style="padding:14px 0;border-bottom:1px solid {COLORS['border_soft']};">
                     <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                       <tr>
-                        <td width="60" valign="middle">
-                          <div style="width:48px;height:48px;background:#F0FDF4;border-radius:14px;line-height:0;">
-                            <img src="{_icon_url('bell.svg')}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;" />
-                          </div>
+                        <td width="52" valign="top">
+                          <div style="width:44px;height:44px;background:#F0FDF4;border-radius:12px;line-height:44px;text-align:center;font-size:20px;">🔔</div>
                         </td>
-                        <td valign="middle" style="padding-left:16px;font-family:{FONT_STACK};">
-                          <p style="margin:0 0 3px;font-size:15px;font-weight:600;color:{COLORS['dark']};">Pick your interests</p>
+                        <td valign="middle" style="padding-left:14px;font-family:{FONT_STACK};">
+                          <p style="margin:0 0 2px;font-size:15px;font-weight:600;color:{COLORS['dark']};">Pick your interests</p>
                           <p style="margin:0;font-size:14px;color:{COLORS['gray']};line-height:1.5;">Post-UTME, admission lists, JAMB CAPS, school fees</p>
                         </td>
                       </tr>
@@ -291,17 +288,15 @@ def _render_welcome(recipient_name: str, recipient_email: str = "") -> str:
                 </tr>
 
                 <tr>
-                  <td style="padding:16px 0 4px;">
+                  <td style="padding:14px 0;">
                     <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                       <tr>
-                        <td width="60" valign="middle">
-                          <div style="width:48px;height:48px;background:#FAF5FF;border-radius:14px;line-height:0;">
-                            <img src="{_icon_url('lightning.svg')}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;" />
-                          </div>
+                        <td width="52" valign="top">
+                          <div style="width:44px;height:44px;background:#FAF5FF;border-radius:12px;line-height:44px;text-align:center;font-size:20px;">⚡</div>
                         </td>
-                        <td valign="middle" style="padding-left:16px;font-family:{FONT_STACK};">
-                          <p style="margin:0 0 3px;font-size:15px;font-weight:600;color:{COLORS['dark']};">Get instant alerts</p>
-                          <p style="margin:0;font-size:14px;color:{COLORS['gray']};line-height:1.5;">The moment something matches, we ping you</p>
+                        <td valign="middle" style="padding-left:14px;font-family:{FONT_STACK};">
+                          <p style="margin:0 0 2px;font-size:15px;font-weight:600;color:{COLORS['dark']};">Get instant alerts</p>
+                          <p style="margin:0;font-size:14px;color:{COLORS['gray']};line-height:1.5;">Push + email the moment something matches</p>
                         </td>
                       </tr>
                     </table>
@@ -314,18 +309,18 @@ def _render_welcome(recipient_name: str, recipient_email: str = "") -> str:
 
           <!-- CTA -->
           <tr>
-            <td align="center" style="padding:32px 36px 40px;">
+            <td align="center" style="padding:36px;">
               <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                 <tr>
-                  <td align="center" style="background:linear-gradient(135deg,#0071E3,#0051A0);border-radius:14px;box-shadow:0 10px 24px rgba(0,113,227,0.35);">
-                    <a href="{SITE_URL}/profile" style="display:inline-block;padding:17px 44px;font-family:{FONT_STACK};font-size:16px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:-0.2px;">
-                      Set your preferences
+                  <td align="center" style="background:linear-gradient(135deg,#0071E3,#0051A0);border-radius:14px;box-shadow:0 8px 20px rgba(0,113,227,0.3);">
+                    <a href="{SITE_URL}/profile" style="display:inline-block;padding:16px 40px;font-family:{FONT_STACK};font-size:16px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:-0.2px;">
+                      Set your preferences →
                     </a>
                   </td>
                 </tr>
               </table>
-              <p style="margin:22px 0 0;font-family:{FONT_STACK};font-size:13px;color:{COLORS['gray']};line-height:1.5;">
-                Takes 30 seconds. Free forever. No spam — promise.
+              <p style="margin:20px 0 0;font-family:{FONT_STACK};font-size:13px;color:{COLORS['gray']};line-height:1.5;">
+                Takes 30 seconds. Free forever. No spam.
               </p>
             </td>
           </tr>
@@ -338,7 +333,7 @@ def _render_welcome(recipient_name: str, recipient_email: str = "") -> str:
     return _wrap(inner, preheader=f"Welcome to Scuttle.io, {name}! Here's how to track your universities.", recipient_email=recipient_email)
 
 # ══════════════════════════════════════════════════════════
-#  TEMPLATE 2 — ANNOUNCEMENT ALERT
+#  TEMPLATE 2 — ANNOUNCEMENT ALERT (THE MOST IMPORTANT ONE)
 # ══════════════════════════════════════════════════════════
 
 def _render_announcement(
@@ -353,10 +348,11 @@ def _render_announcement(
     reason: str = "",
 ) -> str:
     greeting = f"Hi {recipient_name}," if recipient_name else "Hi there,"
-    meta = _cat(category)
+    emoji, bg_tint, fg_color, gradient = _category_style(category)
 
     summary_text = _escape(summary) if summary else "Tap below to read the full notice on the institution's website."
 
+    # Hero image if provided
     hero = ""
     if image_url:
         hero = f"""
@@ -369,15 +365,16 @@ def _render_announcement(
         </tr>
         """
 
+    # Reason banner
     reason_banner = ""
     if reason:
         reason_banner = f"""
         <tr>
-          <td style="padding:22px 36px 0;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:{meta['bg']};border-radius:14px;">
+          <td style="padding:20px 36px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:{bg_tint};border:1px solid {fg_color}22;border-radius:14px;">
               <tr>
-                <td style="padding:14px 18px;font-family:{FONT_STACK};font-size:13px;color:{meta['fg']};line-height:1.5;">
-                  <strong>Why you're seeing this:</strong> {_escape(reason)}
+                <td style="padding:14px 18px;font-family:{FONT_STACK};font-size:13px;color:{fg_color};line-height:1.5;">
+                  🎯 <strong>Why you're seeing this:</strong> {_escape(reason)}
                 </td>
               </tr>
             </table>
@@ -392,66 +389,64 @@ def _render_announcement(
 
           {hero}
 
+          <!-- Top accent bar -->
           <tr>
             <td style="padding:0;line-height:0;">
-              <div style="height:6px;background:{meta['gradient']};"></div>
+              <div style="height:5px;background:{gradient};"></div>
             </td>
           </tr>
 
           {reason_banner}
 
           <tr>
-            <td style="padding:30px 36px 0;font-family:{FONT_STACK};">
+            <td style="padding:28px 36px 0;font-family:{FONT_STACK};">
 
-              <!-- Category badge with icon -->
-              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom:18px;">
+              <!-- Category + University row -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
                 <tr>
-                  <td style="background:{meta['bg']};border-radius:9999px;padding:6px 14px 6px 6px;">
-                    <table cellpadding="0" cellspacing="0" border="0" role="presentation">
-                      <tr>
-                        <td style="padding-right:8px;line-height:0;">
-                          <img src="{_icon_url(meta['icon'])}" width="24" height="24" alt="" style="display:block;width:24px;height:24px;" />
-                        </td>
-                        <td style="font-family:{FONT_STACK};font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:{meta['fg']};">
-                          {_escape(category)}
-                        </td>
-                      </tr>
-                    </table>
+                  <td valign="middle" style="padding-bottom:16px;">
+                    <span style="display:inline-block;padding:6px 12px;border-radius:9999px;font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;background:{bg_tint};color:{fg_color};">
+                      {emoji} {_escape(category)}
+                    </span>
                   </td>
                 </tr>
               </table>
 
+              <!-- University -->
               <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:{COLORS['gray']};letter-spacing:1px;text-transform:uppercase;">
                 {_escape(university)}
               </p>
 
-              <h1 style="margin:0 0 22px;font-size:26px;font-weight:700;color:{COLORS['dark']};letter-spacing:-0.5px;line-height:1.3;">
+              <!-- Title -->
+              <h1 style="margin:0 0 20px;font-size:26px;font-weight:700;color:{COLORS['dark']};letter-spacing:-0.5px;line-height:1.3;">
                 {_escape(title)}
               </h1>
 
+              <!-- Greeting + summary -->
               <p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:{COLORS['dark']};">
                 {greeting}
               </p>
-              <p style="margin:0 0 30px;font-size:15px;line-height:1.7;color:#4B5563;">
+              <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#4B5563;">
                 {summary_text}
               </p>
 
             </td>
           </tr>
 
+          <!-- CTA -->
           <tr>
-            <td style="padding:0 36px 40px;">
-              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom:20px;">
+            <td style="padding:0 36px 36px;">
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                 <tr>
-                  <td align="center" style="background:{meta['gradient']};border-radius:14px;box-shadow:0 10px 24px {meta['fg']}55;">
-                    <a href="{source_url}" style="display:inline-block;padding:16px 38px;font-family:{FONT_STACK};font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:-0.2px;">
+                  <td align="center" style="background:linear-gradient(135deg,#0071E3,#0051A0);border-radius:14px;box-shadow:0 8px 20px rgba(0,113,227,0.3);">
+                    <a href="{source_url}" style="display:inline-block;padding:16px 36px;font-family:{FONT_STACK};font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:-0.2px;">
                       Read Full Notice →
                     </a>
                   </td>
                 </tr>
               </table>
 
-              <p style="margin:0;font-family:{FONT_STACK};font-size:12px;color:{COLORS['gray']};line-height:1.5;">
+              <p style="margin:20px 0 0;font-family:{FONT_STACK};font-size:12px;color:{COLORS['gray']};line-height:1.5;">
                 Source: official notice from {_escape(university)}
               </p>
             </td>
@@ -462,10 +457,10 @@ def _render_announcement(
     </tr>
     """
 
-    return _wrap(inner, preheader=f"{university}: {title[:80]}", recipient_email=recipient_email)
+    return _wrap(inner, preheader=f"{emoji} {university}: {title[:80]}", recipient_email=recipient_email)
 
 # ══════════════════════════════════════════════════════════
-#  TEMPLATE 3 — NEWSLETTER
+#  TEMPLATE 3 — NEWSLETTER (ADMIN BROADCAST)
 # ══════════════════════════════════════════════════════════
 
 def _render_newsletter(subject: str, message: str, recipient_name: str, recipient_email: str = "") -> str:
@@ -481,37 +476,36 @@ def _render_newsletter(subject: str, message: str, recipient_name: str, recipien
       <td style="padding:0 24px;">
         <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:{COLORS['card']};border-radius:28px;box-shadow:0 12px 40px rgba(0,0,0,0.08);overflow:hidden;">
 
+          <!-- Hero -->
           <tr>
-            <td style="background:linear-gradient(135deg,#0071E3 0%,#9333EA 100%);padding:44px 36px 40px;">
-              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom:16px;">
-                <tr>
-                  <td style="background:rgba(255,255,255,0.2);border-radius:9999px;padding:7px 16px;font-family:{FONT_STACK};font-size:10px;font-weight:700;color:#FFFFFF;letter-spacing:1.3px;text-transform:uppercase;">
-                    Newsletter
-                  </td>
-                </tr>
-              </table>
+            <td style="background:linear-gradient(135deg,#0071E3 0%,#9333EA 100%);padding:40px 36px 36px;">
+              <p style="margin:0 0 8px;font-family:{FONT_STACK};font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);letter-spacing:1.2px;text-transform:uppercase;">
+                📬 Newsletter
+              </p>
               <h1 style="margin:0;font-family:{FONT_STACK};font-size:28px;font-weight:700;color:#FFFFFF;letter-spacing:-0.5px;line-height:1.3;">
                 {_escape(subject)}
               </h1>
             </td>
           </tr>
 
+          <!-- Body -->
           <tr>
-            <td style="padding:40px 36px;font-family:{FONT_STACK};">
-              <p style="margin:0 0 22px;font-size:15px;color:{COLORS['gray']};">
+            <td style="padding:36px;font-family:{FONT_STACK};">
+              <p style="margin:0 0 20px;font-size:15px;color:{COLORS['gray']};">
                 {greeting}
               </p>
               {paragraphs}
             </td>
           </tr>
 
+          <!-- CTA -->
           <tr>
-            <td align="center" style="padding:0 36px 40px;">
+            <td style="padding:0 36px 36px;">
               <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                 <tr>
-                  <td align="center" style="background:linear-gradient(135deg,#0071E3,#0051A0);border-radius:14px;box-shadow:0 10px 24px rgba(0,113,227,0.35);">
-                    <a href="{SITE_URL}" style="display:inline-block;padding:16px 38px;font-family:{FONT_STACK};font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;">
-                      Open Scuttle.io
+                  <td align="center" style="background:linear-gradient(135deg,#0071E3,#0051A0);border-radius:14px;box-shadow:0 8px 20px rgba(0,113,227,0.3);">
+                    <a href="{SITE_URL}" style="display:inline-block;padding:16px 36px;font-family:{FONT_STACK};font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;">
+                      Open Scuttle.io →
                     </a>
                   </td>
                 </tr>
@@ -527,7 +521,7 @@ def _render_newsletter(subject: str, message: str, recipient_name: str, recipien
     return _wrap(inner, preheader=f"{subject} — from Scuttle.io", recipient_email=recipient_email)
 
 # ══════════════════════════════════════════════════════════
-#  TEMPLATE 4 — DIGEST
+#  TEMPLATE 4 — WEEKLY DIGEST
 # ══════════════════════════════════════════════════════════
 
 def _render_digest(subject: str, items: List[Dict], recipient_name: str = "", recipient_email: str = "") -> str:
@@ -535,27 +529,14 @@ def _render_digest(subject: str, items: List[Dict], recipient_name: str = "", re
 
     rows = ""
     for i, item in enumerate(items):
-        meta = _cat(item.get("category", ""))
+        emoji, bg_tint, fg_color, _ = _category_style(item.get("category", ""))
         border = "" if i == len(items) - 1 else f"border-bottom:1px solid {COLORS['border_soft']};"
         rows += f"""
         <tr>
-          <td style="padding:22px 0;{border}">
-            <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom:10px;">
-              <tr>
-                <td style="background:{meta['bg']};border-radius:9999px;padding:4px 12px 4px 4px;">
-                  <table cellpadding="0" cellspacing="0" border="0" role="presentation">
-                    <tr>
-                      <td style="padding-right:6px;line-height:0;">
-                        <img src="{_icon_url(meta['icon'])}" width="18" height="18" alt="" style="display:block;width:18px;height:18px;" />
-                      </td>
-                      <td style="font-family:{FONT_STACK};font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:{meta['fg']};">
-                        {_escape(item.get("category", ""))}
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
+          <td style="padding:20px 0;{border}">
+            <span style="display:inline-block;padding:4px 10px;border-radius:9999px;font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;background:{bg_tint};color:{fg_color};margin-bottom:8px;">
+              {emoji} {_escape(item.get("category", ""))}
+            </span>
             <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:{COLORS['gray']};letter-spacing:0.5px;text-transform:uppercase;">
               {_escape(item.get("university_name", ""))}
             </p>
@@ -575,14 +556,10 @@ def _render_digest(subject: str, items: List[Dict], recipient_name: str = "", re
         <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:{COLORS['card']};border-radius:28px;box-shadow:0 12px 40px rgba(0,0,0,0.08);overflow:hidden;">
 
           <tr>
-            <td style="background:linear-gradient(135deg,#0071E3 0%,#9333EA 100%);padding:44px 36px 40px;">
-              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom:16px;">
-                <tr>
-                  <td style="background:rgba(255,255,255,0.2);border-radius:9999px;padding:7px 16px;font-family:{FONT_STACK};font-size:10px;font-weight:700;color:#FFFFFF;letter-spacing:1.3px;text-transform:uppercase;">
-                    Your digest
-                  </td>
-                </tr>
-              </table>
+            <td style="background:linear-gradient(135deg,#0071E3 0%,#9333EA 100%);padding:40px 36px;">
+              <p style="margin:0 0 8px;font-family:{FONT_STACK};font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);letter-spacing:1.2px;text-transform:uppercase;">
+                📊 Your update digest
+              </p>
               <h1 style="margin:0;font-family:{FONT_STACK};font-size:26px;font-weight:700;color:#FFFFFF;letter-spacing:-0.5px;line-height:1.3;">
                 {_escape(subject)}
               </h1>
@@ -590,10 +567,10 @@ def _render_digest(subject: str, items: List[Dict], recipient_name: str = "", re
           </tr>
 
           <tr>
-            <td style="padding:36px 36px 0;font-family:{FONT_STACK};">
-              <p style="margin:0 0 10px;font-size:15px;color:{COLORS['dark']};">{greeting}</p>
-              <p style="margin:0;font-size:14px;color:{COLORS['gray']};line-height:1.6;">
-                {len(items)} new update{"s" if len(items) != 1 else ""} matching your interests:
+            <td style="padding:32px 36px 0;font-family:{FONT_STACK};">
+              <p style="margin:0 0 8px;font-size:15px;color:{COLORS['dark']};">{greeting}</p>
+              <p style="margin:0 0 8px;font-size:14px;color:{COLORS['gray']};line-height:1.6;">
+                Here are the updates matching your interests:
               </p>
             </td>
           </tr>
@@ -610,9 +587,9 @@ def _render_digest(subject: str, items: List[Dict], recipient_name: str = "", re
             <td align="center" style="padding:36px;">
               <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                 <tr>
-                  <td align="center" style="background:{COLORS['dark']};border-radius:14px;box-shadow:0 10px 24px rgba(0,0,0,0.2);">
-                    <a href="{SITE_URL}" style="display:inline-block;padding:16px 38px;font-family:{FONT_STACK};font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;">
-                      See all updates
+                  <td align="center" style="background:linear-gradient(135deg,#1D1D1F,#000000);border-radius:14px;box-shadow:0 8px 20px rgba(0,0,0,0.2);">
+                    <a href="{SITE_URL}" style="display:inline-block;padding:16px 36px;font-family:{FONT_STACK};font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;">
+                      See all updates →
                     </a>
                   </td>
                 </tr>
@@ -633,12 +610,12 @@ def _render_digest(subject: str, items: List[Dict], recipient_name: str = "", re
 
 def _render_subscription(recipient_name: str, frequency: str = "instant", recipient_email: str = "") -> str:
     name = recipient_name or "there"
-    freq_map = {
-        "instant": ("lightning.svg", "#FAF5FF", "#9333EA", "Instant", "You'll get an email the moment updates match your interests."),
-        "daily":   ("calendar.svg",  "#FFF1F2", "#E11D48", "Daily Digest", "One summary email per day at 8 AM."),
-        "weekly":  ("calendar.svg",  "#FFF1F2", "#E11D48", "Weekly Digest", "Every Monday at 8 AM with the week's top updates."),
+    freq_labels = {
+        "instant": ("⚡", "Instant", "You'll get emails as soon as updates match your interests."),
+        "daily":   ("📅", "Daily Digest", "One summary email per day at 8 AM."),
+        "weekly":  ("🗓️", "Weekly Digest", "Every Monday at 8 AM with the week's top updates."),
     }
-    icon_file, bg, fg, freq_label, freq_desc = freq_map.get(frequency, freq_map["instant"])
+    emoji, freq_label, freq_desc = freq_labels.get(frequency, freq_labels["instant"])
 
     inner = f"""
     <tr>
@@ -646,98 +623,55 @@ def _render_subscription(recipient_name: str, frequency: str = "instant", recipi
         <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:{COLORS['card']};border-radius:28px;box-shadow:0 12px 40px rgba(0,0,0,0.08);overflow:hidden;">
 
           <tr>
-            <td style="background:linear-gradient(135deg,#16A34A,#059669);padding:52px 36px 46px;text-align:center;">
-              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto 22px;">
-                <tr>
-                  <td style="background:rgba(255,255,255,0.2);border-radius:50%;width:88px;height:88px;line-height:0;text-align:center;padding:20px;">
-                    <img src="{_icon_url('check.svg')}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;" />
-                  </td>
-                </tr>
-              </table>
-              <h1 style="margin:0 0 12px;font-family:{FONT_STACK};font-size:30px;font-weight:700;color:#FFFFFF;letter-spacing:-0.6px;line-height:1.2;">
-                You're subscribed, {_escape(name)}
+            <td style="background:linear-gradient(135deg,#16A34A,#059669);padding:48px 36px;text-align:center;">
+              <div style="width:80px;height:80px;background:rgba(255,255,255,0.2);border-radius:24px;margin:0 auto 20px;line-height:80px;font-size:40px;">✅</div>
+              <h1 style="margin:0 0 8px;font-family:{FONT_STACK};font-size:28px;font-weight:700;color:#FFFFFF;letter-spacing:-0.5px;line-height:1.3;">
+                You're subscribed, {_escape(name)}!
               </h1>
-              <p style="margin:0;font-family:{FONT_STACK};font-size:15px;color:rgba(255,255,255,0.92);line-height:1.6;">
+              <p style="margin:0;font-family:{FONT_STACK};font-size:15px;color:rgba(255,255,255,0.9);line-height:1.6;">
                 Updates are on the way.
               </p>
             </td>
           </tr>
 
           <tr>
-            <td style="padding:40px 36px 8px;font-family:{FONT_STACK};">
-              <p style="margin:0 0 20px;font-size:13px;font-weight:700;color:{COLORS['gray']};letter-spacing:1px;text-transform:uppercase;">
-                Your delivery frequency
-              </p>
+            <td style="padding:36px;font-family:{FONT_STACK};">
 
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:{bg};border-radius:16px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:{COLORS['light_blue']};border:1px solid {COLORS['blue']}22;border-radius:16px;margin-bottom:24px;">
                 <tr>
-                  <td style="padding:22px;">
-                    <table cellpadding="0" cellspacing="0" border="0" role="presentation">
-                      <tr>
-                        <td style="padding-right:14px;line-height:0;">
-                          <img src="{_icon_url(icon_file)}" width="40" height="40" alt="" style="display:block;width:40px;height:40px;" />
-                        </td>
-                        <td valign="middle">
-                          <p style="margin:0 0 4px;font-size:18px;font-weight:700;color:{COLORS['dark']};">
-                            {freq_label}
-                          </p>
-                          <p style="margin:0;font-size:14px;color:{COLORS['gray']};line-height:1.5;">
-                            {freq_desc}
-                          </p>
-                        </td>
-                      </tr>
-                    </table>
+                  <td style="padding:20px;">
+                    <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:{COLORS['blue']};letter-spacing:0.6px;text-transform:uppercase;">
+                      {emoji} Your frequency
+                    </p>
+                    <p style="margin:0 0 4px;font-size:18px;font-weight:700;color:{COLORS['dark']};">
+                      {freq_label}
+                    </p>
+                    <p style="margin:0;font-size:14px;color:{COLORS['gray']};line-height:1.5;">
+                      {freq_desc}
+                    </p>
                   </td>
                 </tr>
               </table>
 
-              <p style="margin:26px 0 14px;font-size:15px;font-weight:600;color:{COLORS['dark']};">
+              <p style="margin:0 0 16px;font-size:15px;font-weight:600;color:{COLORS['dark']};">
                 What you'll receive
               </p>
-
-              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom:8px;">
-                <tr>
-                  <td style="padding:3px 10px 3px 0;line-height:0;">
-                    <img src="{_icon_url('check.svg')}" width="18" height="18" alt="" style="display:block;width:18px;height:18px;" />
-                  </td>
-                  <td style="font-size:14px;color:#4B5563;line-height:1.6;">
-                    Only announcements matching <strong>your interests</strong>
-                  </td>
-                </tr>
-              </table>
-
-              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom:8px;">
-                <tr>
-                  <td style="padding:3px 10px 3px 0;line-height:0;">
-                    <img src="{_icon_url('check.svg')}" width="18" height="18" alt="" style="display:block;width:18px;height:18px;" />
-                  </td>
-                  <td style="font-size:14px;color:#4B5563;line-height:1.6;">
-                    Only from <strong>universities you follow</strong>
-                  </td>
-                </tr>
-              </table>
-
-              <table cellpadding="0" cellspacing="0" border="0" role="presentation">
-                <tr>
-                  <td style="padding:3px 10px 3px 0;line-height:0;">
-                    <img src="{_icon_url('check.svg')}" width="18" height="18" alt="" style="display:block;width:18px;height:18px;" />
-                  </td>
-                  <td style="font-size:14px;color:#4B5563;line-height:1.6;">
-                    Zero spam — unsubscribe in one click
-                  </td>
-                </tr>
-              </table>
+              <p style="margin:0 0 12px;font-size:14px;color:#4B5563;line-height:1.7;">
+                ✅ Only announcements matching <strong>your interests</strong><br>
+                ✅ Only from <strong>universities you follow</strong><br>
+                ✅ Zero spam — unsubscribe anytime in one click
+              </p>
 
             </td>
           </tr>
 
           <tr>
-            <td align="center" style="padding:32px 36px 40px;">
+            <td align="center" style="padding:0 36px 36px;">
               <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                 <tr>
-                  <td align="center" style="background:linear-gradient(135deg,#0071E3,#0051A0);border-radius:14px;box-shadow:0 10px 24px rgba(0,113,227,0.35);">
-                    <a href="{SITE_URL}/profile" style="display:inline-block;padding:16px 38px;font-family:{FONT_STACK};font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;">
-                      Manage preferences
+                  <td align="center" style="background:linear-gradient(135deg,#0071E3,#0051A0);border-radius:14px;box-shadow:0 8px 20px rgba(0,113,227,0.3);">
+                    <a href="{SITE_URL}/profile" style="display:inline-block;padding:16px 36px;font-family:{FONT_STACK};font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;">
+                      Manage preferences →
                     </a>
                   </td>
                 </tr>
@@ -759,6 +693,7 @@ def _render_subscription(recipient_name: str, frequency: str = "instant", recipi
 def _send_via_brevo(to_email: str, subject: str, html: str, list_unsubscribe: bool = True) -> bool:
     if not BREVO_API_KEY:
         return False
+
     try:
         payload = {
             "sender": {"name": BREVO_SENDER_NAME, "email": BREVO_SENDER_EMAIL},
@@ -771,6 +706,7 @@ def _send_via_brevo(to_email: str, subject: str, html: str, list_unsubscribe: bo
                 "List-Unsubscribe": f"<{SITE_URL}/profile>",
                 "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             }
+
         req = urllib.request.Request(
             "https://api.brevo.com/v3/smtp/email",
             data=json.dumps(payload).encode("utf-8"),
@@ -781,6 +717,7 @@ def _send_via_brevo(to_email: str, subject: str, html: str, list_unsubscribe: bo
             },
             method="POST",
         )
+
         with urllib.request.urlopen(req, timeout=15) as resp:
             logger.info(f"📧 [Brevo] Sent to {to_email}: {subject[:60]}")
             return True
@@ -792,9 +729,11 @@ def _send_via_brevo(to_email: str, subject: str, html: str, list_unsubscribe: bo
         logger.error(f"❌ [Brevo] {type(e).__name__}: {e}")
         return False
 
+
 def _send_via_gmail_smtp(to_email: str, subject: str, html: str, list_unsubscribe: bool = True) -> bool:
     if not _is_configured():
         return False
+
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -809,7 +748,9 @@ def _send_via_gmail_smtp(to_email: str, subject: str, html: str, list_unsubscrib
         if list_unsubscribe:
             msg["List-Unsubscribe"] = f"<mailto:{GMAIL_USER}?subject=unsubscribe>, <{SITE_URL}/profile>"
             msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+
         msg.attach(MIMEText(html, "html"))
+
         context = ssl.create_default_context()
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=15) as server:
             server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
@@ -820,7 +761,9 @@ def _send_via_gmail_smtp(to_email: str, subject: str, html: str, list_unsubscrib
         logger.error(f"[Gmail] Failed: {type(e).__name__}: {e}")
         return False
 
+
 def _send_html(to_email: str, subject: str, html: str, list_unsubscribe: bool = True) -> bool:
+    """Unified sender — Brevo first, Gmail SMTP fallback."""
     if BREVO_API_KEY:
         if _send_via_brevo(to_email, subject, html, list_unsubscribe):
             return True
@@ -835,15 +778,18 @@ def send_email(to_email: str, subject: str, message: str, recipient_name: str = 
     html = _render_newsletter(subject, message, recipient_name, to_email)
     return _send_html(to_email, subject, html)
 
+
 def send_welcome_email(to_email: str, recipient_name: str = "") -> bool:
-    subject = "Welcome to Scuttle.io"
+    subject = "🚀 Welcome to Scuttle.io"
     html = _render_welcome(recipient_name, to_email)
     return _send_html(to_email, subject, html, list_unsubscribe=False)
 
+
 def send_subscription_confirmation(to_email: str, recipient_name: str = "", frequency: str = "instant") -> bool:
-    subject = "You're subscribed to Scuttle.io"
+    subject = "✅ You're subscribed to Scuttle.io updates"
     html = _render_subscription(recipient_name, frequency, to_email)
     return _send_html(to_email, subject, html, list_unsubscribe=True)
+
 
 def send_announcement_alert(
     to_email: str,
@@ -856,7 +802,8 @@ def send_announcement_alert(
     image_url: str = "",
     reason: str = "",
 ) -> bool:
-    subject = f"{university}: {title[:70]}"
+    emoji, _, _, _ = _category_style(category)
+    subject = f"{emoji} {university}: {title[:70]}"
     html = _render_announcement(
         university=university,
         category=category,
@@ -870,9 +817,11 @@ def send_announcement_alert(
     )
     return _send_html(to_email, subject, html)
 
+
 def send_digest(to_email: str, recipient_name: str, subject: str, items: List[Dict]) -> bool:
     html = _render_digest(subject, items, recipient_name, to_email)
     return _send_html(to_email, subject, html)
+
 
 def send_bulk(recipients: List[Dict], subject: str, message: str) -> Dict:
     from time import sleep

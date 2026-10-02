@@ -43,7 +43,7 @@ export default function SignIn() {
   }
 
   const handleApple = () => {
-    setError('🍎 Apple Sign-In is coming soon! Please use Google or email for now.')
+    setError('Apple Sign-In is coming soon — please use Google or email for now.')
   }
 
   return (

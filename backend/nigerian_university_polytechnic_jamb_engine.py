@@ -2801,6 +2801,72 @@ def admin_reset_password(uid: str, auth: dict = Depends(_require_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+# ══════════════════════════════════════════════════════════
+#  EMAIL STATUS — diagnose delivery issues
+# ══════════════════════════════════════════════════════════
+
+@app.get("/api/v1/admin/email-status", tags=["Admin"])
+def email_status():
+    """Check email service config + test all 4 email types."""
+    import os
+    from app.services.email_service import (
+        send_welcome_email,
+        send_subscription_confirmation,
+        send_email,
+        send_announcement_alert,
+        BREVO_API_KEY as _key,
+        BREVO_SENDER_EMAIL as _sender,
+    )
+    from app.services.firebase_sync import init_firebase
+
+    test_email = os.getenv("TEST_EMAIL", "")
+
+    status = {
+        "brevo_configured": bool(_key),
+        "brevo_key_prefix": _key[:14] if _key else "(empty)",
+        "brevo_sender": _sender,
+        "gmail_configured": bool(os.getenv("GMAIL_USER") and os.getenv("GMAIL_APP_PASSWORD")),
+    }
+
+    # Count subscribers
+    try:
+        client = init_firebase()
+        users = list(client.collection("users").stream())
+        status["total_users"] = len(users)
+        status["subscribed_users"] = sum(
+            1 for u in users
+            if u.to_dict().get("newsletterEnabled") and not u.to_dict().get("suspended")
+        )
+        status["instant_users"] = sum(
+            1 for u in users
+            if u.to_dict().get("emailFrequency", "instant") == "instant"
+            and u.to_dict().get("newsletterEnabled")
+        )
+    except Exception as e:
+        status["user_count_error"] = str(e)[:100]
+
+    # Optional: run a live test if TEST_EMAIL env is set
+    if test_email:
+        status["test_results"] = {}
+        status["test_results"]["welcome"] = send_welcome_email(test_email, "Test User")
+        status["test_results"]["subscription"] = send_subscription_confirmation(test_email, "Test User", "instant")
+        status["test_results"]["newsletter"] = send_email(test_email, "Test Newsletter", "This is a test newsletter body.", "Test User")
+        status["test_results"]["announcement"] = send_announcement_alert(
+            to_email=test_email,
+            recipient_name="Test User",
+            university="Test University",
+            category="Post-UTME",
+            title="Test Post-UTME Alert",
+            summary="This is a test announcement to verify email delivery.",
+            source_url="https://scuttle-io.netlify.app",
+            reason="testing email pipeline",
+        )
+
+    return status
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {

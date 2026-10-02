@@ -56,7 +56,7 @@ export default function SignUp() {
   }
 
   const handleApple = () => {
-    setError('🍎 Apple Sign-Up is coming soon! Please use Google or email for now.')
+    setError('Apple Sign-Up is coming soon — please use Google or email for now.')
   }
 
   return (
