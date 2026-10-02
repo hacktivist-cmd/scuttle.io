@@ -54,28 +54,8 @@ export default function SignUp() {
     }
   }
 
-  const handleApple = async () => {
-    setError('')
-    setLoading(true)
-    try {
-      const result = await signInWithApple()
-      const appleName = result?.user?.displayName || ''
-      const appleEmail = result?.user?.email || ''
-      if (appleEmail) {
-        triggerWelcomeEmail(appleEmail, appleName).catch(() => {})
-      }
-      navigate('/', { replace: true })
-    } catch (err) {
-      let msg = (err.message || '').replace('Firebase: ', '')
-      if (err.code === 'auth/operation-not-allowed') {
-        msg = 'Apple sign-in is not enabled. Please use Google or email.'
-      } else if (err.code === 'auth/popup-closed-by-user') {
-        msg = ''
-      }
-      if (msg) setError(msg)
-    } finally {
-      setLoading(false)
-    }
+  const handleApple = () => {
+    setError('🍎 Apple Sign-Up is coming soon! Please use Google or email for now.')
   }
 
   return (
@@ -184,8 +164,14 @@ export default function SignUp() {
         <button
           onClick={handleApple}
           disabled={loading}
-          className="w-full mt-3 bg-black hover:bg-gray-900 text-white px-8 py-3.5 rounded-xl font-medium transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+          className="w-full mt-3 bg-black hover:bg-gray-900 text-white px-8 py-3.5 rounded-xl font-medium transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm relative"
         >
+          <span className="absolute top-2 right-2 text-[9px] bg-white/20 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+            Soon
+          </span>
+          <span className="absolute top-2 right-2 text-[9px] bg-white/20 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+            Soon
+          </span>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
           </svg>
