@@ -11,3 +11,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>,
 )
+
+// Fade out the static boot splash once React mounts
+const bootEl = document.getElementById('scuttle-boot')
+if (bootEl) {
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      bootEl.classList.add('hide')
+      setTimeout(() => bootEl.remove(), 600)
+    }, 100)
+  })
+}

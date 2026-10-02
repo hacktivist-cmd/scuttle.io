@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import AdminLayout from './components/AdminLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 import ScrollToTop from './components/ScrollToTop'
+import SplashScreen from './components/SplashScreen'
 
 import Home from './pages/Home'
 import Universities from './pages/Universities'
@@ -29,8 +31,25 @@ import AdminScraper from './pages/admin/AdminScraper'
 import AdminHealth from './pages/admin/AdminHealth'
 
 export default function App() {
+  const [splashDone, setSplashDone] = useState(() => {
+    // SPLASH_ONCE_PER_SESSION — skip if already shown in this tab/session
+    try {
+      const shown = sessionStorage.getItem('scuttle_splash_shown')
+      if (shown === 'true') return true
+    } catch {}
+    return false
+  })
+
+  const handleSplashComplete = () => {
+    try {
+      sessionStorage.setItem('scuttle_splash_shown', 'true')
+    } catch {}
+    setSplashDone(true)
+  }
+
   return (
     <AuthProvider>
+      {!splashDone && <SplashScreen onComplete={handleSplashComplete} />}
       <ScrollToTop />
       <Routes>
         {/* Main site */}

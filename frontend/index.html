@@ -65,7 +65,82 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="Scuttle.io" />
   </head>
+  <style id="scuttle-ios-splash">
+    /* Match the animated splash screen — white canvas */
+    html, body {
+      background: #FFFFFF;
+      margin: 0;
+      padding: 0;
+    }
+    #scuttle-boot {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 30% 30%, rgba(0,113,227,0.10), transparent 60%),
+                  radial-gradient(ellipse 70% 60% at 70% 70%, rgba(147,51,234,0.08), transparent 60%),
+                  #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      transition: opacity 0.5s ease;
+    }
+    #scuttle-boot.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #scuttle-boot-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    #scuttle-boot img {
+      width: 88px;
+      height: 88px;
+      object-fit: contain;
+      border-radius: 22px;
+      padding: 4px;
+      background: #fff;
+      border: 1.5px solid rgba(0,113,227,0.12);
+      box-shadow:
+        0 24px 60px -12px rgba(0,113,227,0.22),
+        0 8px 20px -4px rgba(147,51,234,0.12);
+      animation: scuttle-boot-pulse 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    #scuttle-boot-ring {
+      width: 140px;
+      height: 140px;
+      position: absolute;
+      border-radius: 50%;
+      border: 1.5px solid rgba(0,113,227,0.30);
+      animation: scuttle-boot-ring 2s ease-out infinite;
+    }
+    #scuttle-boot-label {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+      color: #1D1D1F;
+      margin-top: 8px;
+    }
+    @keyframes scuttle-boot-pulse {
+      0%, 100% { transform: scale(1); }
+      50%      { transform: scale(1.04); }
+    }
+    @keyframes scuttle-boot-ring {
+      0%   { transform: scale(0.85); opacity: 0.7; }
+      100% { transform: scale(1.6);  opacity: 0; }
+    }
+  </style>
   <body>
+    <div id="scuttle-boot">
+      <div id="scuttle-boot-inner" style="position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;">
+        <div id="scuttle-boot-ring"></div>
+        <img src="/logo.png" alt="Scuttle.io" />
+        <div id="scuttle-boot-label">Loading</div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
