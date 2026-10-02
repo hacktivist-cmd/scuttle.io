@@ -1,6 +1,5 @@
 import os
 import logging
-import requests
 import smtplib
 import ssl
 from email.mime.multipart import MIMEMultipart
@@ -22,11 +21,6 @@ logger = logging.getLogger("email_service")
 GMAIL_USER = os.getenv("GMAIL_USER", "")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
 GMAIL_FROM_NAME = os.getenv("GMAIL_FROM_NAME", "Scuttle.io")
-
-# ═══ BREVO HTTP API (works on Render — SMTP is blocked) ═══
-BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
-BREVO_SENDER_EMAIL = os.getenv("BREVO_SENDER_EMAIL", "scuttle.io.ng@gmail.com")
-BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "Scuttle.io")
 
 SITE_URL = os.getenv("SITE_URL", "https://scuttle-io.netlify.app")
 LOGO_URL = f"{SITE_URL}/logo.png"
@@ -297,54 +291,7 @@ def _render_digest(subject: str, items: List[Dict], recipient_name: str = "") ->
 #  SENDERS (with anti-spam headers)
 # ══════════════════════════════════════════════════════════
 
-
-
-def _send_via_brevo(to_email: str, subject: str, html: str, list_unsubscribe: bool = True) -> bool:
-    """Send via Brevo HTTP API. Works on Render free tier (SMTP is blocked)."""
-    if not BREVO_API_KEY:
-        return False
-
-    try:
-        payload = {
-            "sender": {
-                "name": BREVO_SENDER_NAME,
-                "email": BREVO_SENDER_EMAIL,
-            },
-            "to": [{"email": to_email}],
-            "subject": subject[:200],
-            "htmlContent": html,
-        }
-        if list_unsubscribe:
-            payload["headers"] = {
-                "List-Unsubscribe": f"<{SITE_URL}/profile>",
-                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-            }
-
-        headers = {
-            "accept": "application/json",
-            "content-type": "application/json",
-            "api-key": BREVO_API_KEY,
-        }
-
-        r = requests.post(
-            "https://api.brevo.com/v3/smtp/email",
-            headers=headers,
-            json=payload,
-            timeout=15,
-        )
-
-        if r.status_code in (200, 201, 202):
-            logger.info(f"📧 [Brevo] Sent to {to_email}: {subject[:60]}")
-            return True
-        else:
-            logger.error(f"❌ [Brevo] HTTP {r.status_code}: {r.text[:300]}")
-            return False
-    except Exception as e:
-        logger.error(f"❌ [Brevo] {type(e).__name__}: {e}")
-        return False
-
-
-def _send_via_gmail_smtp(to_email: str, subject: str, html: str, list_unsubscribe: bool = True) -> bool:
+def _send_html(to_email: str, subject: str, html: str, list_unsubscribe: bool = True) -> bool:
     if not _is_configured():
         logger.warning(f"Email skipped (Gmail not configured): {to_email}")
         return False
@@ -381,18 +328,6 @@ def _send_via_gmail_smtp(to_email: str, subject: str, html: str, list_unsubscrib
     except Exception as e:
         logger.error(f"Email failed for {to_email}: {e}")
         return False
-
-
-def _send_html(to_email: str, subject: str, html: str, list_unsubscribe: bool = True) -> bool:
-    """Unified sender — Brevo first (works on Render), Gmail SMTP fallback (local dev)."""
-    # Prefer Brevo HTTP API (works on Render where SMTP is blocked)
-    if BREVO_API_KEY:
-        if _send_via_brevo(to_email, subject, html, list_unsubscribe):
-            return True
-        logger.warning("[Brevo] Failed, falling back to Gmail SMTP...")
-
-    # Fallback to Gmail SMTP (works locally, blocked on Render free tier)
-    return _send_via_gmail_smtp(to_email, subject, html, list_unsubscribe)
 
 
 def send_email(to_email: str, subject: str, message: str, recipient_name: str = "") -> bool:

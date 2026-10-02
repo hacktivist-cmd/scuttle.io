@@ -2552,47 +2552,38 @@ def sync_urls_from_seed(db: Session = Depends(get_db)):
 # EMAIL_TEST_ENDPOINT_V1 — diagnose SMTP failures
 @app.get("/api/v1/admin/test-email", tags=["Admin"])
 def test_email(to: str = Query(..., description="Recipient email")):
-    """Send a test email and return full SMTP diagnostic."""
+    """Send a test email and return full diagnostic (Brevo + SMTP)."""
     import os
-    import smtplib
-    import ssl
-    from email.mime.text import MIMEText
-    from email.utils import formataddr
+    from app.services.email_service import _send_via_brevo, _send_via_gmail_smtp
 
-    GMAIL_USER = os.getenv("GMAIL_USER", "")
-    GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
-    GMAIL_FROM_NAME = os.getenv("GMAIL_FROM_NAME", "Scuttle.io")
+    BREVO_KEY = os.getenv("BREVO_API_KEY", "")
+    BREVO_SENDER = os.getenv("BREVO_SENDER_EMAIL", "")
+    GMAIL_USER_VAL = os.getenv("GMAIL_USER", "")
 
     diag = {
-        "gmail_user": GMAIL_USER or "(EMPTY)",
-        "gmail_user_has_at": "@" in GMAIL_USER,
-        "gmail_password_len": len(GMAIL_APP_PASSWORD),
-        "gmail_password_set": bool(GMAIL_APP_PASSWORD),
+        "brevo_key_set": bool(BREVO_KEY),
+        "brevo_key_prefix": BREVO_KEY[:14] if BREVO_KEY else "(empty)",
+        "brevo_sender": BREVO_SENDER or "(not set, using default)",
+        "gmail_user": GMAIL_USER_VAL or "(empty)",
         "to": to,
     }
 
-    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
-        return {**diag, "status": "MISSING_CREDS", "error": "GMAIL_USER or GMAIL_APP_PASSWORD missing"}
+    test_html = "<h2>✅ Scuttle.io test email</h2><p>If you see this, email delivery works!</p>"
 
-    if "@" not in GMAIL_USER:
-        return {**diag, "status": "BAD_USER", "error": "GMAIL_USER is missing @ — check Render env vars"}
+    if BREVO_KEY:
+        result = _send_via_brevo(to, "🎯 Scuttle.io Test", test_html, list_unsubscribe=False)
+        if result:
+            return {**diag, "status": "SENT_VIA_BREVO", "message": "Check inbox + spam"}
+        return {**diag, "status": "BREVO_FAILED", "error": "See Render logs for details"}
 
-    try:
-        msg = MIMEText("This is a test email from Scuttle.io. If you see this, SMTP works!", "plain")
-        msg["Subject"] = "🎯 Scuttle.io SMTP Test"
-        msg["From"] = formataddr((GMAIL_FROM_NAME, GMAIL_USER))
-        msg["To"] = to
+    if GMAIL_USER_VAL:
+        result = _send_via_gmail_smtp(to, "🎯 Scuttle.io Test", test_html, list_unsubscribe=False)
+        if result:
+            return {**diag, "status": "SENT_VIA_GMAIL", "message": "Check inbox + spam"}
+        return {**diag, "status": "GMAIL_FAILED", "error": "SMTP likely blocked on Render"}
 
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=15) as server:
-            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-            server.sendmail(GMAIL_USER, to, msg.as_string())
+    return {**diag, "status": "NO_PROVIDER", "error": "Set BREVO_API_KEY"}
 
-        return {**diag, "status": "SENT", "message": "Email sent — check inbox + spam"}
-    except smtplib.SMTPAuthenticationError as e:
-        return {**diag, "status": "AUTH_FAILED", "error": str(e)}
-    except Exception as e:
-        return {**diag, "status": "ERROR", "error": str(e), "error_type": type(e).__name__}
 
 
 @app.get("/", tags=["Health Check"])
