@@ -1858,6 +1858,21 @@ def send_subscription(payload: _SubscriptionPayload):
         return {"status": "sent" if ok else "failed", "to": payload.email}
 
 
+
+
+# ==================== Newsletter Celery Task ====================
+
+@celery_app.task(name="main.send_newsletter_task")
+def send_newsletter_task(recipients: list, subject: str, message: str):
+    """Actually send newsletter via Gmail SMTP (async)."""
+    from app.services.email_service import send_bulk
+
+    logger.info(f"📬 Newsletter task started: {len(recipients)} recipients")
+    result = send_bulk(recipients, subject, message)
+    logger.info(f"✅ Newsletter complete: {result}")
+    return result
+
+
 @app.post("/api/v1/send-newsletter", tags=["Newsletter"])
 def send_newsletter(payload: _NewsletterPayload):
     """NEWSLETTER_REAL_V1 — queue the newsletter for actual Gmail sending."""
