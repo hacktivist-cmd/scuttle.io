@@ -1661,6 +1661,38 @@ app = FastAPI(
     description="JAMB + Nigerian institutions scraper + Firebase sync",
 )
 
+
+
+# ══════════════════════════════════════════════════════════
+#  PAYLOAD MODELS — top-level, always available before endpoints
+# ══════════════════════════════════════════════════════════
+
+from pydantic import BaseModel as _BaseModel
+from typing import List as _List
+
+
+class _WelcomePayload(_BaseModel):
+    email: str
+    name: str = ""
+
+
+class _SubscriptionPayload(_BaseModel):
+    email: str
+    name: str = ""
+    frequency: str = "instant"
+
+
+class _NewsletterRecipient(_BaseModel):
+    email: str
+    name: str = ""
+
+
+class _NewsletterPayload(_BaseModel):
+    subject: str
+    message: str
+    recipients: _List[_NewsletterRecipient]
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -1829,28 +1861,34 @@ def trigger_manual_scrape():
 
 @app.post("/api/v1/send-welcome", tags=["Emails"])
 def send_welcome(payload: _WelcomePayload):
-    """Fire a welcome email after registration (async via Celery)."""
-    try:
-        send_welcome_async.delay(payload.email, payload.name)
-        return {"status": "queued", "to": payload.email}
-    except Exception as e:
-        logger.warning(f"Celery unavailable, sending sync: {e}")
-        from app.services.email_service import send_welcome_email
-        ok = send_welcome_email(payload.email, payload.name)
-        return {"status": "sent" if ok else "failed", "to": payload.email}
+    """SYNC_V1 — send welcome email directly (no Celery)."""
+    from app.services.email_service import send_welcome_email
+    import threading
+
+    def _run():
+        try:
+            send_welcome_email(payload.email, payload.name)
+        except Exception as e:
+            logger.error(f"Welcome email failed: {e}")
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "sent", "to": payload.email}
 
 
 @app.post("/api/v1/send-subscription", tags=["Emails"])
 def send_subscription(payload: _SubscriptionPayload):
-    """Fire a subscription confirmation email (async via Celery)."""
-    try:
-        send_subscription_async.delay(payload.email, payload.name, payload.frequency)
-        return {"status": "queued", "to": payload.email}
-    except Exception as e:
-        logger.warning(f"Celery unavailable, sending sync: {e}")
-        from app.services.email_service import send_subscription_confirmation
-        ok = send_subscription_confirmation(payload.email, payload.name, payload.frequency)
-        return {"status": "sent" if ok else "failed", "to": payload.email}
+    """SYNC_V1 — send subscription confirmation directly (no Celery)."""
+    from app.services.email_service import send_subscription_confirmation
+    import threading
+
+    def _run():
+        try:
+            send_subscription_confirmation(payload.email, payload.name, payload.frequency)
+        except Exception as e:
+            logger.error(f"Subscription email failed: {e}")
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "sent", "to": payload.email}
 
 
 
@@ -1870,39 +1908,32 @@ def send_newsletter_task(recipients: list, subject: str, message: str):
 
 @app.post("/api/v1/send-newsletter", tags=["Newsletter"])
 def send_newsletter(payload: _NewsletterPayload):
-    """NEWSLETTER_REAL_V1 — queue the newsletter for actual Gmail sending."""
+    """SYNC_V1 — queue newsletter send in background thread (no Celery)."""
+    import threading
+
     if not payload.recipients:
         return {"status": "error", "message": "No recipients"}
 
     logger.info(f"📬 Newsletter queued: '{payload.subject}' → {len(payload.recipients)} recipients")
 
-    # Try Celery (async); fall back to sync send if Celery is unavailable
-    try:
-        send_newsletter_task.delay(
-            [{"email": r.email, "name": r.name} for r in payload.recipients],
-            payload.subject,
-            payload.message,
-        )
-        return {
-            "status": "queued",
-            "subject": payload.subject,
-            "recipients": len(payload.recipients),
-        }
-    except Exception as e:
-        logger.warning(f"Celery unavailable, sending sync: {e}")
-        from app.services.email_service import send_bulk
-        result = send_bulk(
-            [{"email": r.email, "name": r.name} for r in payload.recipients],
-            payload.subject,
-            payload.message,
-        )
-        return {
-            "status": "sent",
-            "subject": payload.subject,
-            "recipients": len(payload.recipients),
-            "result": result,
-        }
+    def _run():
+        try:
+            from app.services.email_service import send_bulk
+            result = send_bulk(
+                [{"email": r.email, "name": r.name} for r in payload.recipients],
+                payload.subject,
+                payload.message,
+            )
+            logger.info(f"✅ Newsletter complete: {result}")
+        except Exception as e:
+            logger.error(f"Newsletter failed: {e}")
 
+    threading.Thread(target=_run, daemon=True).start()
+    return {
+        "status": "queued",
+        "subject": payload.subject,
+        "recipients": len(payload.recipients),
+    }
 
 
 # ==================== OG Image Endpoint ====================
