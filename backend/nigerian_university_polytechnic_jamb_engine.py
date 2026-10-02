@@ -2545,6 +2545,56 @@ def sync_urls_from_seed(db: Session = Depends(get_db)):
     return {"updated": updated, "skipped": skipped, "total": len(NIGERIAN_INSTITUTIONS_SEED)}
 
 
+
+
+# ==================== Email Test Endpoint ====================
+
+# EMAIL_TEST_ENDPOINT_V1 — diagnose SMTP failures
+@app.get("/api/v1/admin/test-email", tags=["Admin"])
+def test_email(to: str = Query(..., description="Recipient email")):
+    """Send a test email and return full SMTP diagnostic."""
+    import os
+    import smtplib
+    import ssl
+    from email.mime.text import MIMEText
+    from email.utils import formataddr
+
+    GMAIL_USER = os.getenv("GMAIL_USER", "")
+    GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
+    GMAIL_FROM_NAME = os.getenv("GMAIL_FROM_NAME", "Scuttle.io")
+
+    diag = {
+        "gmail_user": GMAIL_USER or "(EMPTY)",
+        "gmail_user_has_at": "@" in GMAIL_USER,
+        "gmail_password_len": len(GMAIL_APP_PASSWORD),
+        "gmail_password_set": bool(GMAIL_APP_PASSWORD),
+        "to": to,
+    }
+
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+        return {**diag, "status": "MISSING_CREDS", "error": "GMAIL_USER or GMAIL_APP_PASSWORD missing"}
+
+    if "@" not in GMAIL_USER:
+        return {**diag, "status": "BAD_USER", "error": "GMAIL_USER is missing @ — check Render env vars"}
+
+    try:
+        msg = MIMEText("This is a test email from Scuttle.io. If you see this, SMTP works!", "plain")
+        msg["Subject"] = "🎯 Scuttle.io SMTP Test"
+        msg["From"] = formataddr((GMAIL_FROM_NAME, GMAIL_USER))
+        msg["To"] = to
+
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=15) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_USER, to, msg.as_string())
+
+        return {**diag, "status": "SENT", "message": "Email sent — check inbox + spam"}
+    except smtplib.SMTPAuthenticationError as e:
+        return {**diag, "status": "AUTH_FAILED", "error": str(e)}
+    except Exception as e:
+        return {**diag, "status": "ERROR", "error": str(e), "error_type": type(e).__name__}
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {
