@@ -59,34 +59,59 @@ export default function Hero() {
             'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=2070&auto=format&fit=crop'
         }}
       />
-      {/* HERO_BACKDROP_V1 — decorative layers */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-black/40" />
+      {/* HERO_BACKDROP_V2 — visible glow, pattern, and corner accents */}
 
-      {/* Radial glow accents */}
+      {/* Strong radial glows — colored light beams */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-60"
+        className="absolute inset-0 pointer-events-none"
         style={{
           background: `
-            radial-gradient(ellipse 60% 40% at 20% 20%, rgba(0,113,227,0.25), transparent 70%),
-            radial-gradient(ellipse 50% 40% at 80% 70%, rgba(147,51,234,0.20), transparent 70%),
-            radial-gradient(ellipse 40% 30% at 50% 100%, rgba(251,146,60,0.15), transparent 70%)
+            radial-gradient(ellipse 55% 45% at 15% 25%, rgba(59,130,246,0.45), transparent 65%),
+            radial-gradient(ellipse 50% 40% at 85% 75%, rgba(168,85,247,0.35), transparent 65%),
+            radial-gradient(ellipse 45% 35% at 50% 105%, rgba(251,146,60,0.30), transparent 65%),
+            radial-gradient(ellipse 40% 30% at 50% -5%, rgba(16,185,129,0.20), transparent 65%)
           `,
         }}
       />
 
-      {/* Dot-grid pattern */}
+      {/* Academic dot grid — subtle pattern overlay */}
       <div
-        className="absolute inset-0 opacity-[0.15] pointer-events-none"
+        className="absolute inset-0 opacity-25 pointer-events-none mix-blend-overlay"
         style={{
-          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.5) 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-          maskImage: 'radial-gradient(ellipse 80% 80% at center, black 30%, transparent 80%)',
-          WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at center, black 30%, transparent 80%)',
+          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.7) 1px, transparent 1.5px)',
+          backgroundSize: '24px 24px',
         }}
       />
 
-      {/* Top edge shimmer line */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none" />
+      {/* Diagonal accent stripes — bottom-left corner */}
+      <div
+        className="absolute bottom-0 left-0 w-1/3 h-1/3 pointer-events-none opacity-[0.12]"
+        style={{
+          backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.6) 0, rgba(255,255,255,0.6) 1px, transparent 1px, transparent 12px)',
+          maskImage: 'linear-gradient(45deg, black, transparent 80%)',
+          WebkitMaskImage: 'linear-gradient(45deg, black, transparent 80%)',
+        }}
+      />
+
+      {/* Corner brackets — premium frame feel */}
+      <div className="absolute top-6 left-6 w-16 h-16 border-t-2 border-l-2 border-white/30 rounded-tl-2xl pointer-events-none" />
+      <div className="absolute top-6 right-6 w-16 h-16 border-t-2 border-r-2 border-white/30 rounded-tr-2xl pointer-events-none" />
+      <div className="absolute bottom-6 left-6 w-16 h-16 border-b-2 border-l-2 border-white/30 rounded-bl-2xl pointer-events-none" />
+      <div className="absolute bottom-6 right-6 w-16 h-16 border-b-2 border-r-2 border-white/30 rounded-br-2xl pointer-events-none" />
+
+      {/* Animated top shimmer bar */}
+      <div className="absolute top-0 left-0 right-0 h-[3px] pointer-events-none overflow-hidden rounded-t-[2.5rem]">
+        <div
+          className="h-full w-full animate-shimmer"
+          style={{
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.8), rgba(59,130,246,0.9), rgba(168,85,247,0.7), transparent)',
+            backgroundSize: '200% 100%',
+          }}
+        />
+      </div>
+
+      {/* Bottom vignette for text readability */}
+      <div className="absolute inset-x-0 bottom-0 h-2/3 pointer-events-none bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
       <div className="relative z-10 text-center px-6 max-w-4xl mx-auto space-y-8">
         <span
