@@ -1359,7 +1359,7 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
         return
 
     category = classify_announcement_category(title)
-    slug_hash = hashlib.sha256(f"{university_id}-{title.strip().lower()}").hexdigest()
+    slug_hash = hashlib.sha256(f"{university_id}-{title.strip().lower()}".encode()).hexdigest()
 
     db = SessionLocal()
     try:
