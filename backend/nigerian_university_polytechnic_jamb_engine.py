@@ -1812,40 +1812,19 @@ def list_announcements(
 
 @app.post("/api/v1/trigger-scrape", tags=["Scraper Control"])
 def trigger_manual_scrape():
-    run_all_scrapers_and_jamb.delay()
-    return {"status": "success", "message": "Scraping job dispatched to Celery."}
+    """SYNC_TRIGGER_V1 — run scraper directly in background thread."""
+    import threading
 
+    def _run():
+        try:
+            logger.info("🚀 Manual scrape triggered via API")
+            run_all_scrapers_and_jamb()
+        except Exception as e:
+            logger.error(f"Manual scrape failed: {e}")
 
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "success", "message": "Scraper started in background"}
 
-
-# ==================== Newsletter ====================
-
-from pydantic import BaseModel as _BaseModel
-from typing import List as _List
-
-class _NewsletterRecipient(_BaseModel):
-    email: str
-    name: str = ""
-
-class _NewsletterPayload(_BaseModel):
-    subject: str
-    message: str
-    recipients: _List[_NewsletterRecipient]
-
-
-
-
-# ==================== Welcome & Subscription Endpoints ====================
-
-class _WelcomePayload(BaseModel):
-    email: str
-    name: str = ""
-
-
-class _SubscriptionPayload(BaseModel):
-    email: str
-    name: str = ""
-    frequency: str = "instant"
 
 
 @app.post("/api/v1/send-welcome", tags=["Emails"])
@@ -2469,58 +2448,18 @@ def scrape_all_force():
 
 @app.post("/api/v1/admin/scrape-all-force", tags=["Admin"])
 def trigger_force_scrape():
-    """Force-scrape ALL universities (bypasses due-check)."""
-    scrape_all_force.delay()
-    return {"status": "queued", "message": "Force-scrape dispatched for all universities"}
+    """SYNC_FORCE_V1 — force-scrape all unis in background thread."""
+    import threading
 
+    def _run():
+        try:
+            logger.info("🚀 Force scrape triggered via API")
+            scrape_all_force()
+        except Exception as e:
+            logger.error(f"Force scrape failed: {e}")
 
-
-
-# ==================== Async Sync Task ====================
-
-@celery_app.task(name="main.sync_firestore_async")
-def sync_firestore_async():
-    """Background task to sync PostgreSQL → Firestore."""
-    from app.services.firebase_sync import push_announcement
-
-    db = SessionLocal()
-    try:
-        rows = (
-            db.query(AnnouncementModel, UniversityModel)
-            .join(UniversityModel, AnnouncementModel.university_id == UniversityModel.id)
-            .order_by(AnnouncementModel.date_scraped.desc())
-            .all()
-        )
-
-        logger.info(f"🔄 Sync task started: {len(rows)} announcements")
-        ok, failed = 0, 0
-        for i, (ann, uni) in enumerate(rows, 1):
-            success = push_announcement({
-                "slug_hash": ann.slug_hash,
-                "university_name": uni.name,
-                "institution_type": uni.institution_type,
-                "category": ann.category,
-                "title": ann.title,
-                "summary": ann.summary or "",
-                "source_url": ann.source_url,
-                "pdf_extracted_text": ann.pdf_extracted_text,
-                "date_scraped": ann.date_scraped.isoformat() if ann.date_scraped else datetime.utcnow().isoformat(),
-                "priority": ann.priority or "normal",
-                "university_code": uni.short_code,
-                "image_url": getattr(ann, "image_url", "") or "",
-            })
-            if success:
-                ok += 1
-            else:
-                failed += 1
-            if i % 20 == 0:
-                logger.info(f"  Progress: {i}/{len(rows)} ({ok} synced)")
-
-        logger.info(f"✅ Sync complete: {ok} synced, {failed} failed")
-        return {"synced": ok, "failed": failed, "total": len(rows)}
-    finally:
-        db.close()
-
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "queued", "message": "Force-scrape dispatched"}
 
 
 
