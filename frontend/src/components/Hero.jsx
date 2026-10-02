@@ -59,7 +59,34 @@ export default function Hero() {
             'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=2070&auto=format&fit=crop'
         }}
       />
+      {/* HERO_BACKDROP_V1 — decorative layers */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-black/40" />
+
+      {/* Radial glow accents */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-60"
+        style={{
+          background: `
+            radial-gradient(ellipse 60% 40% at 20% 20%, rgba(0,113,227,0.25), transparent 70%),
+            radial-gradient(ellipse 50% 40% at 80% 70%, rgba(147,51,234,0.20), transparent 70%),
+            radial-gradient(ellipse 40% 30% at 50% 100%, rgba(251,146,60,0.15), transparent 70%)
+          `,
+        }}
+      />
+
+      {/* Dot-grid pattern */}
+      <div
+        className="absolute inset-0 opacity-[0.15] pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.5) 1px, transparent 1px)',
+          backgroundSize: '32px 32px',
+          maskImage: 'radial-gradient(ellipse 80% 80% at center, black 30%, transparent 80%)',
+          WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at center, black 30%, transparent 80%)',
+        }}
+      />
+
+      {/* Top edge shimmer line */}
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none" />
 
       <div className="relative z-10 text-center px-6 max-w-4xl mx-auto space-y-8">
         <span

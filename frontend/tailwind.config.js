@@ -43,6 +43,10 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(30px) scale(0.96)' },
           '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
+        marquee: {
+          '0%': { transform: 'translateX(0%)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
         heroImageIn: {
           '0%': { transform: 'scale(1.15)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
@@ -54,6 +58,7 @@ export default {
         'hero-reveal': 'heroReveal 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards',
         'card-enter': 'cardEnter 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards',
         'hero-image-in': 'heroImageIn 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'marquee': 'marquee 45s linear infinite',
       },
     },
   },

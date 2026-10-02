@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { SearchX, Loader2, Bell, Star, Clock, Filter } from 'lucide-react'
 import Hero from '../components/Hero'
+import UniMarquee from '../components/UniMarquee'
 import Filters from '../components/Filters'
 import AnnouncementCard from '../components/AnnouncementCard'
 import AnnouncementModal from '../components/AnnouncementModal'
@@ -125,6 +126,8 @@ export default function Home() {
   return (
     <div className="max-w-6xl w-full mx-auto px-6 py-8 md:py-12 flex flex-col gap-10">
       <Hero />
+
+      <UniMarquee />
 
       <RevealWrapper>
         <Filters
