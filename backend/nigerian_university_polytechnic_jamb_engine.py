@@ -2602,6 +2602,205 @@ def memory_check():
     }
 
 
+
+
+# ══════════════════════════════════════════════════════════
+#  USER MANAGEMENT — suspend, delete, self-delete
+# ══════════════════════════════════════════════════════════
+
+from fastapi import Header as _Header
+
+
+def _verify_id_token(authorization: str = _Header(None)):
+    """Extract Firebase ID token from Authorization header and verify."""
+    from firebase_admin import auth as fb_auth
+    from app.services.firebase_sync import init_firebase
+
+    init_firebase()  # ensure SDK is initialized
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    token = authorization.split(" ", 1)[1]
+    try:
+        decoded = fb_auth.verify_id_token(token)
+        return decoded
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)[:80]}")
+
+
+def _require_admin(authorization: str = _Header(None)):
+    """Verify the caller is an admin."""
+    decoded = _verify_id_token(authorization)
+    from app.services.firebase_sync import init_firebase
+
+    client = init_firebase()
+    uid = decoded.get("uid")
+    doc = client.collection("users").document(uid).get()
+    if not doc.exists:
+        raise HTTPException(status_code=403, detail="User profile not found")
+    if not doc.to_dict().get("isAdmin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return decoded
+
+
+@app.post("/api/v1/admin/users/{uid}/suspend", tags=["Admin"])
+def suspend_user(uid: str, reason: str = Query("", description="Reason for suspension"),
+                 auth: dict = Depends(_require_admin)):
+    """Suspend a user — they can no longer sign in or receive emails/pushes."""
+    from firebase_admin import auth as fb_auth
+    from datetime import datetime as _dt
+    from app.services.firebase_sync import init_firebase
+
+    client = init_firebase()
+    ref = client.collection("users").document(uid)
+    snap = ref.get()
+
+    if not snap.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    data = snap.to_dict()
+    if data.get("isAdmin"):
+        raise HTTPException(status_code=400, detail="Cannot suspend an admin")
+
+    # Mark in Firestore
+    ref.set({
+        "suspended": True,
+        "suspendedAt": _dt.utcnow().isoformat(),
+        "suspendedReason": reason or "Policy violation",
+    }, merge=True)
+
+    # Disable Firebase Auth account (blocks login)
+    try:
+        fb_auth.update_user(uid, disabled=True)
+        fb_auth.revoke_refresh_tokens(uid)
+    except Exception as e:
+        logger.warning(f"Could not disable Firebase user {uid}: {e}")
+
+    logger.info(f"🚫 Suspended user: {data.get('email')} ({uid})")
+    return {"status": "suspended", "uid": uid, "email": data.get("email")}
+
+
+@app.post("/api/v1/admin/users/{uid}/unsuspend", tags=["Admin"])
+def unsuspend_user(uid: str, auth: dict = Depends(_require_admin)):
+    """Restore access for a suspended user."""
+    from firebase_admin import auth as fb_auth
+    from app.services.firebase_sync import init_firebase
+
+    client = init_firebase()
+    ref = client.collection("users").document(uid)
+    snap = ref.get()
+
+    if not snap.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    ref.set({
+        "suspended": False,
+        "suspendedAt": None,
+        "suspendedReason": None,
+    }, merge=True)
+
+    try:
+        fb_auth.update_user(uid, disabled=False)
+    except Exception as e:
+        logger.warning(f"Could not enable Firebase user {uid}: {e}")
+
+    logger.info(f"✅ Unsuspended user: {snap.to_dict().get('email')} ({uid})")
+    return {"status": "unsuspended", "uid": uid}
+
+
+@app.delete("/api/v1/admin/users/{uid}", tags=["Admin"])
+def admin_delete_user(uid: str, auth: dict = Depends(_require_admin)):
+    """Permanently delete a user (Firestore doc + Firebase Auth account)."""
+    from firebase_admin import auth as fb_auth
+    from app.services.firebase_sync import init_firebase
+
+    client = init_firebase()
+    ref = client.collection("users").document(uid)
+    snap = ref.get()
+
+    if not snap.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    data = snap.to_dict()
+    if data.get("isAdmin"):
+        raise HTTPException(status_code=400, detail="Cannot delete an admin")
+
+    # Delete Firestore doc
+    try:
+        ref.delete()
+    except Exception as e:
+        logger.warning(f"Firestore delete failed: {e}")
+
+    # Delete Firebase Auth user
+    try:
+        fb_auth.delete_user(uid)
+    except Exception as e:
+        logger.warning(f"Auth delete failed: {e}")
+
+    logger.info(f"🗑️  Deleted user: {data.get('email')} ({uid})")
+    return {"status": "deleted", "uid": uid, "email": data.get("email")}
+
+
+@app.delete("/api/v1/user/me", tags=["User"])
+def delete_my_account(auth: dict = Depends(_verify_id_token)):
+    """User deletes their own account."""
+    from firebase_admin import auth as fb_auth
+    from app.services.firebase_sync import init_firebase
+
+    uid = auth.get("uid")
+    client = init_firebase()
+    ref = client.collection("users").document(uid)
+    snap = ref.get()
+
+    if not snap.exists:
+        # Already gone — still delete Auth record for cleanup
+        try:
+            fb_auth.delete_user(uid)
+        except Exception:
+            pass
+        return {"status": "deleted", "uid": uid}
+
+    data = snap.to_dict()
+    if data.get("isAdmin"):
+        raise HTTPException(status_code=400, detail="Admins must transfer ownership before deleting")
+
+    try:
+        ref.delete()
+    except Exception as e:
+        logger.warning(f"Firestore delete failed: {e}")
+
+    try:
+        fb_auth.delete_user(uid)
+    except Exception as e:
+        logger.warning(f"Auth delete failed: {e}")
+
+    logger.info(f"🗑️  Self-deleted: {data.get('email')} ({uid})")
+    return {"status": "deleted", "uid": uid}
+
+
+@app.post("/api/v1/admin/users/{uid}/reset-password", tags=["Admin"])
+def admin_reset_password(uid: str, auth: dict = Depends(_require_admin)):
+    """Send a password reset email to a user."""
+    from firebase_admin import auth as fb_auth
+    from app.services.firebase_sync import init_firebase
+
+    client = init_firebase()
+    snap = client.collection("users").document(uid).get()
+    if not snap.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    email = snap.to_dict().get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="User has no email")
+
+    try:
+        link = fb_auth.generate_password_reset_link(email)
+        return {"status": "reset_link_generated", "uid": uid, "email": email, "link": link}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {

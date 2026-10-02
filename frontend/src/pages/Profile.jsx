@@ -15,6 +15,7 @@ import ChangePassword from '../components/ChangePassword'
 import PushNotificationSettings from '../components/PushNotificationSettings'
 import ShareAppCard from '../components/ShareAppCard'
 import UniversityLogo from '../components/UniversityLogo'
+import DeleteAccountSection from '../components/DeleteAccountSection'
 
 const CATEGORIES = [
   { key: 'Post-UTME', label: 'Post-UTME', icon: FileText, color: 'blue' },
@@ -359,6 +360,9 @@ export default function Profile() {
 
       {/* Share App */}
       <ShareAppCard />
+
+      {/* Delete Account */}
+      <DeleteAccountSection />
 
       {/* Save Button */}
       <button

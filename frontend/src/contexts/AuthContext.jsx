@@ -32,7 +32,21 @@ export function AuthProvider({ children }) {
         const snap = await getDoc(ref)
 
         if (snap.exists()) {
-          setProfile(snap.data())
+          const data = snap.data()
+
+          // SUSPENDED_BLOCK_V1 — sign out suspended users immediately
+          if (data.suspended === true && !data.isAdmin) {
+            console.warn('User suspended — signing out')
+            try {
+              await signOut(auth)
+            } catch {}
+            setUser(null)
+            setProfile(null)
+            setLoading(false)
+            return
+          }
+
+          setProfile(data)
         } else {
           const newProfile = {
             uid: fbUser.uid,
