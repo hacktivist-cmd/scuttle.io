@@ -15,7 +15,7 @@ export default function ShareButtons({ item }) {
   const shareTitle = item?.title || 'Scuttle.io'
   const shareUni = item?.university_name || ''
 
-  const shareUrl = `${siteUrl}/?share=${item?.id || ''}`
+  const shareUrl = item?.id ? `${siteUrl}/notice/${item.id}` : siteUrl
 
   const handleCopy = async () => {
     try {

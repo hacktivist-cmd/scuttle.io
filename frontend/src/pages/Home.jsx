@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { SearchX, Loader2, Bell, Star, Clock, Filter } from 'lucide-react'
 import Hero from '../components/Hero'
 import UniMarquee from '../components/UniMarquee'
@@ -22,6 +22,7 @@ const HIGH_PRIORITY = ['Post-UTME', 'Admission List', 'JAMB CAPS']
 
 export default function Home() {
   const location = useLocation()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { announcements, status } = useAnnouncements()
   const { count: readCount, clearAll } = useReadTracking()
@@ -46,7 +47,14 @@ export default function Home() {
       setSearch(location.state.searchTerm)
       window.history.replaceState({}, document.title)
     }
-  }, [location.state])
+
+    // SHARE_REDIRECT_V1 — old ?share=<id> links redirect to /notice/<id>
+    const params = new URLSearchParams(location.search)
+    const shareId = params.get('share')
+    if (shareId) {
+      navigate(`/notice/${shareId}`, { replace: true })
+    }
+  }, [location.state, location.search, navigate])
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)

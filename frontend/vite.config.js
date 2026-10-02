@@ -12,6 +12,8 @@ export default defineConfig({
         'favicon-16x16.png',
         'favicon-32x32.png',
         'apple-touch-icon.png',
+        '/android-chrome-192x192.png',
+        '/android-chrome-512x512.png',
         'logo.png',
       ],
       manifest: {
@@ -24,6 +26,7 @@ export default defineConfig({
         orientation: 'portrait',
         scope: '/',
         start_url: '/',
+        // PWA_ICONS_FIXED_V2 — android-chrome files (actual filenames)
         icons: [
           {
             src: '/android-chrome-192x192.png',
@@ -38,7 +41,7 @@ export default defineConfig({
             purpose: 'any',
           },
           {
-            src: '/android-chrome-512x512.png',
+            src: '/pwa-maskable-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
@@ -46,6 +49,12 @@ export default defineConfig({
           {
             src: '/apple-touch-icon.png',
             sizes: '180x180',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/favicon-32x32.png',
+            sizes: '32x32',
             type: 'image/png',
             purpose: 'any',
           },
