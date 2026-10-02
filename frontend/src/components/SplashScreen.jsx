@@ -205,7 +205,7 @@ export default function SplashScreen({ onComplete }) {
           <div className="relative flex flex-col items-center z-10">
 
             {/* ───── Logo Stage ───── */}
-            <div className="relative flex items-center justify-center" style={{ width: 220, height: 220 }}>
+            <div className="relative flex items-center justify-center" style={{ width: 260, height: 260 }}>
 
               {/* Concentric ripples — continuous loop */}
               {[0, 1, 2].map((i) => (
@@ -213,8 +213,8 @@ export default function SplashScreen({ onComplete }) {
                   key={i}
                   className="absolute rounded-full border"
                   style={{
-                    width: 130,
-                    height: 130,
+                    width: 170,
+                    height: 170,
                     borderColor: 'rgba(0,113,227,0.35)',
                     borderWidth: 1.5,
                   }}
@@ -238,8 +238,8 @@ export default function SplashScreen({ onComplete }) {
                 transition={{ duration: 1.0, ease: 'easeOut', delay: 0.4 }}
                 className="absolute rounded-full splash-halo"
                 style={{
-                  width: 160,
-                  height: 160,
+                  width: 210,
+                  height: 210,
                   background:
                     'radial-gradient(circle, rgba(0,113,227,0.35) 0%, rgba(147,51,234,0.20) 40%, transparent 70%)',
                   filter: 'blur(24px)',
@@ -255,7 +255,7 @@ export default function SplashScreen({ onComplete }) {
                 <motion.div
                   key={i}
                   className="absolute"
-                  style={{ width: 184, height: 184 }}
+                  style={{ width: 240, height: 240 }}
                   animate={{ rotate: orbit.reverse ? -360 : 360 }}
                   transition={{
                     duration: orbit.duration,
@@ -286,8 +286,8 @@ export default function SplashScreen({ onComplete }) {
                 transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
                 className="absolute rounded-full"
                 style={{
-                  width: 184,
-                  height: 184,
+                  width: 240,
+                  height: 240,
                   border: '1px solid rgba(0,113,227,0.15)',
                 }}
               />
@@ -303,9 +303,9 @@ export default function SplashScreen({ onComplete }) {
                 }}
                 className="relative"
                 style={{
-                  width: 112,
-                  height: 112,
-                  borderRadius: 28,
+                  width: 148,
+                  height: 148,
+                  borderRadius: 36,
                   background: '#FFFFFF',
                   border: '1.5px solid rgba(0,113,227,0.12)',
                   boxShadow:
@@ -320,7 +320,7 @@ export default function SplashScreen({ onComplete }) {
                     width: '100%',
                     height: '100%',
                     objectFit: 'contain',
-                    borderRadius: 22,
+                    borderRadius: 30,
                   }}
                 />
               </motion.div>

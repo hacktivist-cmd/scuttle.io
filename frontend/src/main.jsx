@@ -21,4 +21,10 @@ if (bootEl) {
       setTimeout(() => bootEl.remove(), 600)
     }, 100)
   })
+
+  // BOOT_FALLBACK_V1 — hard-remove after 3s no matter what
+  setTimeout(() => {
+    const leftover = document.getElementById('scuttle-boot')
+    if (leftover) leftover.remove()
+  }, 3000)
 }
