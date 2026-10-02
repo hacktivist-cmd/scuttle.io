@@ -2572,6 +2572,30 @@ def test_email(to: str = Query(..., description="Recipient email")):
 
 
 
+
+
+@app.get("/api/v1/admin/memory", tags=["Admin"])
+def memory_check():
+    """Show current memory usage."""
+    import os
+    try:
+        import psutil
+    except ImportError:
+        return {"error": "psutil not installed"}
+
+    proc = psutil.Process(os.getpid())
+    mem = proc.memory_info()
+    sys_mem = psutil.virtual_memory()
+
+    return {
+        "process_rss_mb": round(mem.rss / 1024 / 1024, 2),
+        "system_total_mb": round(sys_mem.total / 1024 / 1024, 2),
+        "system_used_mb": round(sys_mem.used / 1024 / 1024, 2),
+        "system_available_mb": round(sys_mem.available / 1024 / 1024, 2),
+        "system_percent": sys_mem.percent,
+    }
+
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {
