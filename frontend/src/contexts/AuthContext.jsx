@@ -5,6 +5,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
+  OAuthProvider,
   signOut,
   updateProfile,
 } from 'firebase/auth'
@@ -70,6 +71,13 @@ export function AuthProvider({ children }) {
     return signInWithPopup(auth, provider)
   }
 
+  const signInWithApple = async () => {
+    const provider = new OAuthProvider('apple.com')
+    provider.addScope('email')
+    provider.addScope('name')
+    return signInWithPopup(auth, provider)
+  }
+
   const logOut = () => signOut(auth)
 
   const refreshProfile = async () => {
@@ -93,6 +101,7 @@ export function AuthProvider({ children }) {
     signIn,
     signUp,
     signInWithGoogle,
+    signInWithApple,
     logOut,
     refreshProfile,
     updateUserProfile,

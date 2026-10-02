@@ -2,11 +2,14 @@ import { useEffect, useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, MessageCircle, User, LogOut, Settings, ChevronDown, Shield } from 'lucide-react'
 import LiveStatus from './LiveStatus'
+import { shareApp } from '../lib/share'
+import { Share2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [toast, setToast] = useState(null)
   const menuRef = useRef(null)
   const { user, profile, isAdmin, logOut } = useAuth()
   const navigate = useNavigate()
@@ -29,6 +32,17 @@ export default function Header() {
     setMenuOpen(false)
     await logOut()
     navigate('/')
+  }
+
+  const handleShare = async () => {
+    const result = await shareApp({
+      title: 'Scuttle.io',
+      text: 'Track Nigerian university admissions in real-time — Post-UTME, JAMB CAPS, admission lists.',
+    })
+    if (result === 'copied') {
+      setToast('Link copied!')
+      setTimeout(() => setToast(null), 2000)
+    }
   }
 
   return (
@@ -57,6 +71,15 @@ export default function Header() {
 
         <div className="flex items-center space-x-3">
           <LiveStatus />
+
+          {/* Share button */}
+          <button
+            onClick={handleShare}
+            className="group flex items-center justify-center w-9 h-9 rounded-full bg-white hover:bg-gray-50 border border-gray-200 text-apple-gray hover:text-apple-blue transition-all duration-300 hover:-translate-y-0.5 shadow-sm"
+            title="Share Scuttle.io"
+          >
+            <Share2 size={15} />
+          </button>
 
           <a
             href="https://whatsapp.com"
@@ -141,6 +164,20 @@ export default function Header() {
           )}
         </div>
       </div>
+
+      {/* Share toast */}
+      {toast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 bg-apple-dark text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-[60] animate-[fadeIn_0.2s_ease-out]">
+          {toast}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translate(-50%, -10px); }
+          to { opacity: 1; transform: translate(-50%, 0); }
+        }
+      `}</style>
     </header>
   )
 }

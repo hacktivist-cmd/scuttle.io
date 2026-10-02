@@ -13,6 +13,7 @@ import { EMAIL_FREQUENCIES } from '../lib/emailPreferences'
 import { triggerSubscriptionEmail } from '../lib/emailApi'
 import ChangePassword from '../components/ChangePassword'
 import PushNotificationSettings from '../components/PushNotificationSettings'
+import ShareAppCard from '../components/ShareAppCard'
 import UniversityLogo from '../components/UniversityLogo'
 
 const CATEGORIES = [
@@ -355,6 +356,9 @@ export default function Profile() {
 
       {/* Change Password */}
       <ChangePassword />
+
+      {/* Share App */}
+      <ShareAppCard />
 
       {/* Save Button */}
       <button

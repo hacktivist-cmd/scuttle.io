@@ -5,6 +5,7 @@ import ScrollProgressBar from './ScrollProgressBar'
 import ScrollTopButton from './ScrollTopButton'
 import InstallPrompt from './InstallPrompt'
 import NotificationPrompt from './NotificationPrompt'
+import SharePrompt from './SharePrompt'
 import { useBadgeReset } from '../hooks/useBadgeReset'
 
 export default function Layout() {
@@ -21,6 +22,7 @@ export default function Layout() {
       <ScrollTopButton />
       <InstallPrompt />
       <NotificationPrompt />
+      <SharePrompt />
     </div>
   )
 }

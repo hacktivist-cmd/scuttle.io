@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import RevealWrapper from './RevealWrapper'
+import ShareAppCard from './ShareAppCard'
 
 const TwitterIcon = (props) => (
   <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
@@ -88,6 +89,9 @@ export default function Footer() {
           </RevealWrapper>
 
           <RevealWrapper delay={300}>
+            <div className="mb-6">
+              <ShareAppCard />
+            </div>
             <h3 className="text-sm font-semibold uppercase tracking-wider mb-4">Stay Updated</h3>
             <p className="text-apple-gray text-sm mb-4">Get the latest admission alerts directly in your inbox.</p>
             <form onSubmit={(e) => { e.preventDefault(); setSubscribed(true) }} className="flex flex-col space-y-3">
