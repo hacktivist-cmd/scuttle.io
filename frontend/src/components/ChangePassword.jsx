@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Lock, Eye, EyeOff, Loader2, Check, AlertCircle, Shield } from 'lucide-react'
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth'
 import { useAuth } from '../contexts/AuthContext'
+import { friendlyAuthError } from '../lib/authErrors'
 
 export default function ChangePassword() {
   const { user } = useAuth()
@@ -41,8 +42,7 @@ export default function ChangePassword() {
       setCurrentPw(''); setNewPw(''); setConfirmPw('')
       setTimeout(() => { setOpen(false); setToast(null) }, 1500)
     } catch (err) {
-      const msg = (err.message || '').replace('Firebase: ', '')
-      setToast({ type: 'error', msg })
+      setToast({ type: 'error', msg: friendlyAuthError(err) })
     } finally {
       setLoading(false)
     }

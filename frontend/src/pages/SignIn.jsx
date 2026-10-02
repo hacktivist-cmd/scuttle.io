@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Mail, Lock, Loader2, ArrowLeft } from 'lucide-react'
+import { Mail, Lock, Loader2, ArrowLeft, AlertCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { friendlyAuthError } from '../lib/authErrors'
 
 export default function SignIn() {
   const { signIn, signInWithGoogle, signInWithApple } = useAuth()
@@ -22,7 +23,7 @@ export default function SignIn() {
       await signIn(email, password)
       navigate(from, { replace: true })
     } catch (err) {
-      setError(err.message.replace('Firebase: ', ''))
+      setError(friendlyAuthError(err))
     } finally {
       setLoading(false)
     }
@@ -35,7 +36,7 @@ export default function SignIn() {
       await signInWithGoogle()
       navigate(from, { replace: true })
     } catch (err) {
-      setError(err.message.replace('Firebase: ', ''))
+      setError(friendlyAuthError(err))
     } finally {
       setLoading(false)
     }
@@ -58,8 +59,9 @@ export default function SignIn() {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 text-red-700 text-sm">
-            {error}
+          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3">
+            <AlertCircle size={18} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700 leading-relaxed">{error}</p>
           </div>
         )}
 

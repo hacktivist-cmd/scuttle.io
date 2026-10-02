@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Mail, Lock, User, Loader2, ArrowLeft, Check } from 'lucide-react'
+import { Mail, Lock, User, Loader2, ArrowLeft, Check, AlertCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { friendlyAuthError } from '../lib/authErrors'
 import { triggerWelcomeEmail } from '../lib/emailApi'
 
 export default function SignUp() {
@@ -18,7 +19,7 @@ export default function SignUp() {
     e.preventDefault()
     setError('')
     if (password.length < 6) {
-      setError('Password must be at least 6 characters.')
+      setError('Your password must be at least 6 characters long.')
       return
     }
     setLoading(true)
@@ -30,7 +31,7 @@ export default function SignUp() {
 
       navigate('/', { replace: true })
     } catch (err) {
-      setError(err.message.replace('Firebase: ', ''))
+      setError(friendlyAuthError(err))
     } finally {
       setLoading(false)
     }
@@ -48,7 +49,7 @@ export default function SignUp() {
       }
       navigate('/', { replace: true })
     } catch (err) {
-      setError(err.message.replace('Firebase: ', ''))
+      setError(friendlyAuthError(err))
     } finally {
       setLoading(false)
     }
@@ -71,8 +72,9 @@ export default function SignUp() {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 text-red-700 text-sm">
-            {error}
+          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3">
+            <AlertCircle size={18} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700 leading-relaxed">{error}</p>
           </div>
         )}
 
