@@ -1,3 +1,4 @@
+import threading
 import os
 import uuid
 import hashlib
@@ -588,7 +589,7 @@ def extract_date_from_page(url: str):
         r = requests.get(url, headers=headers, timeout=3)
         if r.status_code != 200:
             return None
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(r.text, "lxml")
 
         # 1. Meta tags — check many variants
         meta_variants = [
@@ -669,7 +670,7 @@ def extract_image_from_page(url: str) -> str:
         if r.status_code != 200:
             return ""
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(r.text, "lxml")
 
         # 1. Try og:image
         og = soup.find("meta", property="og:image")
@@ -840,7 +841,7 @@ def scrape_multipath_institution(uni_id: str, base_url: str, uni_name: str) -> i
             r = requests.get(test_url, headers=headers, timeout=3)
             if r.status_code == 200:
                 # Parse links from this page
-                soup = BeautifulSoup(r.text, "html.parser")
+                soup = BeautifulSoup(r.text, "lxml")
                 for link_tag in soup.find_all("a", href=True):
                     title = link_tag.get_text().strip()
                     href = link_tag["href"]
@@ -947,7 +948,8 @@ def scrape_sitemap_institution(uni_id: str, base_url: str, uni_name: str) -> int
     ]
 
     added = 0
-    for url in all_urls[:80]:  # Cap at 80 URLs per uni
+    # MEMORY_CAP_URLS — hard cap at 40 URLs per uni (UNILAG had 4578)
+    for url in all_urls[:40]:
         url_lower = url.lower()
 
         # Skip excluded URLs
@@ -964,7 +966,7 @@ def scrape_sitemap_institution(uni_id: str, base_url: str, uni_name: str) -> int
             if r.status_code != 200:
                 continue
 
-            soup = BeautifulSoup(r.text, "html.parser")
+            soup = BeautifulSoup(r.text, "lxml")
 
             # Get title
             title_tag = soup.find("title")
@@ -1152,7 +1154,7 @@ def fetch_page_description(url: str, timeout: int = 3) -> str:
         if len(r.text) < 1500:
             return ""
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(r.text, "lxml")
 
         # 1. og:description
         og = soup.find("meta", property="og:description")
@@ -1544,7 +1546,7 @@ def scrape_html_institution(uni_id, base_url, uni_name):
     try:
         r = requests.get(base_url, headers=headers, timeout=3)
         if r.status_code == 200:
-            soup = BeautifulSoup(r.text, "html.parser")
+            soup = BeautifulSoup(r.text, "lxml")
             for a in soup.find_all("a", href=True):
                 title = a.get_text().strip()
                 href = a["href"]
@@ -1555,6 +1557,28 @@ def scrape_html_institution(uni_id, base_url, uni_name):
                         submit_scraped_item_to_backend(uni_id, title, full, f"Official update from {uni_name}. Click to view the full notice on the institution\x27s website.")
     except Exception as e:
         logger.error(f"HTML scrape failed {uni_name}: {e}")
+
+
+# ══════════════════════════════════════════════════════════
+#  SCRAPE_LOCK_V1 — prevent overlapping scrapes (OOM fix)
+# ══════════════════════════════════════════════════════════
+_scrape_lock = threading.Lock()
+_current_scrape_started_at = [None]
+
+
+def run_all_scrapers_and_jamb_guarded():
+    """Wrapper: skips if another scrape is already running."""
+    if not _scrape_lock.acquire(blocking=False):
+        logger.warning(f"⏭️  Scrape skipped — another is already running (since {_current_scrape_started_at[0]})")
+        return {"status": "skipped", "reason": "already_running"}
+    try:
+        _current_scrape_started_at[0] = datetime.utcnow().isoformat()
+        logger.info(f"🔒 Scrape lock acquired at {_current_scrape_started_at[0]}")
+        return run_all_scrapers_and_jamb()
+    finally:
+        _current_scrape_started_at[0] = None
+        _scrape_lock.release()
+        logger.info("🔓 Scrape lock released")
 
 
 @celery_app.task(name="main.run_all_scrapers_and_jamb")
@@ -1625,12 +1649,28 @@ def run_all_scrapers_and_jamb():
                     failed_codes.append(inst.short_code)
                     logger.warning(f"  ❌ {inst.short_code}: {str(inst_err)[:80]}")
 
+            # MEMORY_FLUSH — force gc to release BeautifulSoup/requests objects
+            try:
+                import gc as _gc
+                _gc.collect()
+                logger.info(f"🧹 GC collected after batch {i // BATCH_SIZE + 1}")
+            except Exception:
+                pass
+
             # Sleep between batches so we don't hammer servers
             if i + BATCH_SIZE < len(all_insts):
                 logger.info(f"⏸️  Sleeping {batch_delay}s before next batch...")
                 _time.sleep(batch_delay)
 
         logger.info(f"🎉 Scrape complete: {succeeded} ✅ / {failed} ❌")
+
+        # AUTO_GC_AFTER_SCRAPE — release accumulated memory
+        try:
+            import gc as _gc
+            collected = _gc.collect()
+            logger.info(f"🧹 Post-scrape GC: collected {collected} objects")
+        except Exception:
+            pass
         if failed_codes:
             logger.info(f"   Failed: {', '.join(failed_codes[:20])}")
 
@@ -1827,8 +1867,15 @@ def startup_event():
         except Exception as imp_err:
             logger.error(f"❌ app.services import failed: {imp_err}")
 
-    _threading.Thread(target=_background_init, daemon=True).start()
+    threading.Thread(target=_background_init, daemon=True).start()
     logger.info("✅ Uvicorn can bind port now — heavy init running in background")
+
+    # STARTUP_GC_V1 — force garbage collection on boot
+    try:
+        import gc as _gc
+        _gc.collect()
+    except Exception:
+        pass
 
 @app.get("/api/v1/universities", response_model=List[UniversityResponse], tags=["Institutions"])
 def list_universities(skip: int = 0, limit: int = 250, db: Session = Depends(get_db)):
@@ -1884,12 +1931,12 @@ def trigger_manual_scrape():
     def _run():
         try:
             logger.info("🚀 Manual scrape triggered via API")
-            run_all_scrapers_and_jamb()
+            run_all_scrapers_and_jamb_guarded()
         except Exception as e:
             logger.error(f"Manual scrape failed: {e}")
 
     threading.Thread(target=_run, daemon=True).start()
-    return {"status": "success", "message": "Scraper started in background"}
+    return {"status": "success", "message": "Scraper dispatch requested"}
 
 
 
@@ -2899,6 +2946,40 @@ def email_status():
         )
 
     return status
+
+
+
+
+# ══════════════════════════════════════════════════════════
+#  MEMORY_GUARD_V1 — diagnostics + forced GC
+# ══════════════════════════════════════════════════════════
+
+@app.get("/api/v1/admin/memory", tags=["Admin"])
+def memory_check(force_gc: bool = False):
+    """Current memory + optional forced garbage collection."""
+    import os
+    try:
+        import psutil
+        import gc
+    except ImportError:
+        return {"error": "psutil not installed"}
+
+    if force_gc:
+        gc.collect()
+
+    proc = psutil.Process(os.getpid())
+    mem = proc.memory_info()
+    sys_mem = psutil.virtual_memory()
+
+    return {
+        "process_rss_mb": round(mem.rss / 1024 / 1024, 2),
+        "system_total_mb": round(sys_mem.total / 1024 / 1024, 2),
+        "system_used_mb": round(sys_mem.used / 1024 / 1024, 2),
+        "system_available_mb": round(sys_mem.available / 1024 / 1024, 2),
+        "system_percent": sys_mem.percent,
+        "scrape_running": _scrape_lock.locked() if '_scrape_lock' in dir() else None,
+        "scrape_started_at": _current_scrape_started_at[0] if '_current_scrape_started_at' in dir() else None,
+    }
 
 
 @app.get("/", tags=["Health Check"])
