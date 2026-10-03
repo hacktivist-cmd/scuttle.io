@@ -1359,6 +1359,33 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
         return
 
     category = classify_announcement_category(title)
+
+    # PRIORITY_FIX_V1 — define priority ONCE so push_announcement can reference it
+    try:
+        priority = determine_priority(category)
+    except Exception:
+        priority = "normal"
+
+    # DEDUPE_FIX_V1 — early exit if this announcement already exists
+    _pre_hash = hashlib.sha256(
+        f"{university_id}-{title.strip().lower()}".encode()
+    ).hexdigest()
+
+    _db = SessionLocal()
+    try:
+        _exists = _db.query(AnnouncementModel).filter(
+            AnnouncementModel.slug_hash == _pre_hash
+        ).first()
+        if _exists:
+            _db.close()
+            return  # silently skip — already in DB
+    except Exception:
+        pass
+    finally:
+        try:
+            _db.close()
+        except Exception:
+            pass
     slug_hash = hashlib.sha256(f"{university_id}-{title.strip().lower()}".encode()).hexdigest()
 
     db = SessionLocal()
