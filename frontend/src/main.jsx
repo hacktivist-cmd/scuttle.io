@@ -28,3 +28,19 @@ if (bootEl) {
     if (leftover) leftover.remove()
   }, 3000)
 }
+
+
+// Workbox network error handler — silently ignore cache write failures
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'CACHE_ERROR') {
+      console.warn('Cache write failed (ignored):', event.data)
+    }
+  })
+  // Suppress unhandled promise rejections from Workbox
+  window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason?.name === 'NetworkError' && String(event.reason?.message || '').includes('Cache.put')) {
+      event.preventDefault()
+    }
+  })
+}

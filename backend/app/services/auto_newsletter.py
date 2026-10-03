@@ -26,10 +26,11 @@ def notify_matching_users_from_firestore(announcement: dict) -> dict:
         logger.warning(f"[newsletter] Missing metadata for: {title[:60]}")
         return {"notified": 0, "matched": [], "skipped": 0}
 
+    from app.services.user_cache import get_cached_users
     try:
-        users = [{"_id": d.id, **d.to_dict()} for d in client.collection("users").stream()]
+        users = get_cached_users()
     except Exception as e:
-        logger.error(f"[newsletter] Failed to fetch users: {e}")
+        logger.error(f"[newsletter] Failed to get users: {e}")
         return {"notified": 0, "matched": [], "skipped": 0}
 
     matched = []

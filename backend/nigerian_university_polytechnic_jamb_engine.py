@@ -1562,6 +1562,13 @@ def run_all_scrapers_and_jamb():
     """BATCH_SCRAPER_V2 — scan all universities in small batches."""
     import time as _time
 
+    # QUOTA_GUARD — invalidate user cache so we refresh once at scrape start
+    try:
+        from app.services.user_cache import invalidate_cache
+        invalidate_cache()
+    except Exception:
+        pass
+
     db = SessionLocal()
     try:
         # SMART_REFRESH_V1 — only re-scrape if it's been 1+ hours

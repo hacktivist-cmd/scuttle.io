@@ -122,13 +122,16 @@ def notify_users_about_announcement(announcement: dict):
     summary = announcement.get("summary", "")
     source_url = announcement.get("source_url", "")
 
-    # Collect matching users
+    # Collect matching users (from cache — prevents quota exhaustion)
+    from app.services.user_cache import get_cached_users
+
     matching_tokens = []
     try:
-        users = client.collection("users").stream()
-        for doc in users:
-            u = doc.to_dict()
+        users = get_cached_users()
+        for u in users:
             if not u.get("pushEnabled") or not u.get("fcmToken"):
+                continue
+            if u.get("suspended"):
                 continue
 
             interests = u.get("interests") or []
@@ -142,7 +145,7 @@ def notify_users_about_announcement(announcement: dict):
             if matches_cat or matches_uni:
                 matching_tokens.append(u["fcmToken"])
     except Exception as e:
-        logger.error(f"Failed to fetch users: {e}")
+        logger.error(f"Failed to get users from cache: {e}")
         return
 
     if not matching_tokens:
