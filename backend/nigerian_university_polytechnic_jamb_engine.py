@@ -1138,7 +1138,7 @@ SPA_CONFIGS = {
     "MADUKA": {
         "api_base": "https://api.cms.madukauniversity.edu.ng/api/v1",
         "posts_path": "/post",
-        "post_url_template": "{base}/post/{id}",
+        "post_url_template": "{base}/news/{id}",  # SPA_URL_FIX_V1 — actual route is /news/
         "id_field": "_id",
         "title_field": "title",
         "content_field": "content",
@@ -1446,10 +1446,66 @@ def is_junk_title(title: str) -> bool:
     return False
 
 
+
+
+# ══════════════════════════════════════════════════════════
+#  VERIFY_URL_V1 — confirm links exist before ingesting
+# ══════════════════════════════════════════════════════════
+_url_verify_cache = {}
+_URL_VERIFY_MAX_CACHE = 500
+
+
+def verify_url_exists(url: str, timeout: int = 4) -> bool:
+    """
+    Quick HEAD request to verify a URL actually exists.
+    Returns True if status is 2xx or 3xx (redirect OK).
+    Caches results to avoid duplicate checks within a scrape cycle.
+    """
+    if not url or not url.startswith("http"):
+        return False
+
+    # Cache lookup
+    if url in _url_verify_cache:
+        return _url_verify_cache[url]
+
+    # Cap cache size to avoid unbounded memory growth
+    if len(_url_verify_cache) > _URL_VERIFY_MAX_CACHE:
+        _url_verify_cache.clear()
+
+    headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
+
+    # Try HEAD first (fast)
+    try:
+        r = requests.head(url, headers=headers, timeout=timeout, allow_redirects=True)
+        ok = 200 <= r.status_code < 400
+        # Some servers block HEAD — retry with GET if 405/403
+        if r.status_code in (403, 405, 501):
+            ok = True  # Assume it exists — HEAD just isn't allowed
+        _url_verify_cache[url] = ok
+        return ok
+    except Exception:
+        pass
+
+    # GET fallback (slower, only if HEAD fails)
+    try:
+        r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True, stream=True)
+        ok = 200 <= r.status_code < 400
+        _url_verify_cache[url] = ok
+        return ok
+    except Exception:
+        _url_verify_cache[url] = False
+        return False
+
+
 def submit_scraped_item_to_backend(university_id, title, source_url, summary=None, attachment_url=None, image_url=None, date_published=None):
     # JUNK_FILTER — reject nav links, emails, phones
     if is_junk_title(title):
         logger.debug(f"⏭️  Skipping junk title: {title[:60]}")
+        return
+
+    # VERIFY_URL_V1 — reject broken URLs before ingesting
+    if source_url and not verify_url_exists(source_url):
+        logger.info(f"⏭️  Skipping (URL invalid): {source_url[:80]}")
         return
 
     category = classify_announcement_category(title)
