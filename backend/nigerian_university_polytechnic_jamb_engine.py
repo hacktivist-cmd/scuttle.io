@@ -1060,6 +1060,12 @@ def scrape_sitemap_institution(uni_id: str, base_url: str, uni_name: str) -> int
 
             soup = BeautifulSoup(r.text, "lxml")
 
+            # SKIP_VERIFY_SITEMAP_V1 — this URL was fetched, mark as verified
+            try:
+                _url_verify_cache[url] = True
+            except NameError:
+                pass
+
             # Get title
             title_tag = soup.find("title")
             if title_tag and title_tag.string:
@@ -1449,53 +1455,214 @@ def is_junk_title(title: str) -> bool:
 
 
 # ══════════════════════════════════════════════════════════
-#  VERIFY_URL_V1 — confirm links exist before ingesting
+#  UNIVERSAL_URL_RESOLVER — find working URLs for any content
 # ══════════════════════════════════════════════════════════
 _url_verify_cache = {}
-_URL_VERIFY_MAX_CACHE = 500
+_dead_url_cache = set()  # Skip list
+_DEAD_CACHE_MAX = 5000  # Cap to prevent unbounded growth
+_URL_VERIFY_MAX_CACHE = 1000
 
 
-def verify_url_exists(url: str, timeout: int = 4) -> bool:
+def verify_url_content(url: str, expected_title: str, timeout: int = 5) -> str:
     """
-    Quick HEAD request to verify a URL actually exists.
-    Returns True if status is 2xx or 3xx (redirect OK).
-    Caches results to avoid duplicate checks within a scrape cycle.
+    CONTENT_VERIFY_V1 — verify URL by checking actual HTML content.
+    Returns:
+      "valid"     — URL exists AND content matches
+      "spa"       — SPA shell detected, can't verify server-side
+      "invalid"   — 404 or content mismatch
+      "error"     — network error
     """
     if not url or not url.startswith("http"):
-        return False
+        return "invalid"
 
-    # Cache lookup
-    if url in _url_verify_cache:
-        return _url_verify_cache[url]
-
-    # Cap cache size to avoid unbounded memory growth
-    if len(_url_verify_cache) > _URL_VERIFY_MAX_CACHE:
-        _url_verify_cache.clear()
+    if url in _dead_url_cache:
+        return "invalid"
 
     headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
 
-    # Try HEAD first (fast)
     try:
-        r = requests.head(url, headers=headers, timeout=timeout, allow_redirects=True)
-        ok = 200 <= r.status_code < 400
-        # Some servers block HEAD — retry with GET if 405/403
-        if r.status_code in (403, 405, 501):
-            ok = True  # Assume it exists — HEAD just isn't allowed
-        _url_verify_cache[url] = ok
-        return ok
+        r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+    except Exception as e:
+        logger.debug(f"URL fetch failed: {url[:60]} — {str(e)[:40]}")
+        return "error"
+
+    if r.status_code >= 400:
+        _dead_url_cache.add(url)
+        return "invalid"
+
+    html = r.text or ""
+
+    # ── SPA shell detection ──
+    # SPAs serve tiny HTML (<3KB) with React/Vue root and asset bundle
+    if len(html) < 3000 and ("id=\"root\"" in html or "id=\"app\"" in html):
+        # Also check if expected title appears in HTML (SSR or meta tags)
+        if expected_title:
+            import re as _re_spa
+            clean = _re_spa.sub(r'\s+', ' ', expected_title.strip().lower())
+            words = [w for w in _re_spa.findall(r'\w+', clean) if len(w) > 4][:5]
+            if words:
+                matches = sum(1 for w in words if w in html.lower())
+                if matches >= 2:
+                    return "valid"  # SSR shell has the title
+        return "spa"  # Can't verify — trust the config
+
+    # ── Regular site — check title in HTML ──
+    if expected_title:
+        import re as _re_v
+        clean = _re_v.sub(r'\s+', ' ', expected_title.strip().lower())
+        words = [w for w in _re_v.findall(r'\w+', clean) if len(w) > 4]
+
+        if words:
+            # Take top 5 significant words
+            matches = sum(1 for w in words[:5] if w in html.lower())
+            # Need ≥2 matches to consider it the right page
+            if matches >= 2:
+                return "valid"
+            else:
+                # Title mismatch — could be wrong URL
+                logger.debug(f"Content mismatch: '{expected_title[:40]}' not found at {url[:60]}")
+                return "invalid"
+        else:
+            # Title too short to check — trust status code
+            return "valid"
+
+    return "valid"  # No title to check, status was 2xx = valid
+
+
+# VERIFIED_URL_TEMPLATES — only use templates we've confirmed work.
+# Add entries here AFTER manually verifying the URL pattern in a browser.
+# NEVER guess — a wrong template creates broken links for users.
+VERIFIED_URL_TEMPLATES = {
+    # ── Confirmed working patterns ──
+    "MADUKA": "{base}/news/{id}",
+    # Add more as you verify them manually:
+    # "OTHERUNI": "{base}/notice/{id}",
+}
+
+
+def resolve_url_by_pattern(base_url: str, post_id: str, uni_code: str = None, timeout: int = 3):
+    """
+    Use ONLY the verified URL template for this university.
+    Returns the constructed URL, or None if no template is configured.
+    """
+    if not base_url or not post_id or not uni_code:
+        return None
+
+    template = VERIFIED_URL_TEMPLATES.get(uni_code.upper())
+    if not template:
+        logger.debug(f"  No verified URL template for {uni_code} — skipping pattern guess")
+        return None
+
+    url = template.format(base=base_url.rstrip("/"), id=post_id)
+    logger.info(f"  ✅ Using verified template for {uni_code}: {url}")
+    return url
+
+
+def search_url_by_title(base_url: str, title: str, uni_name: str) -> str:
+    """
+    Fallback: search the site's homepage/sitemap for a link matching the title.
+    Returns the actual URL, or None.
+    """
+    if not base_url or not title or len(title) < 15:
+        return None
+
+    base = base_url.rstrip("/")
+    headers = {"User-Agent": "Mozilla/5.0 ScuttleBot/2.0"}
+
+    # Normalize title for matching
+    import re as _re_t
+    title_words = _re_t.findall(r'\w+', title.lower())
+    title_keywords = [w for w in title_words if len(w) > 4][:5]
+
+    if not title_keywords:
+        return None
+
+    # Check sitemap first (fastest)
+    sitemap_urls = [f"{base}/sitemap.xml", f"{base}/wp-sitemap.xml",
+                    f"{base}/post-sitemap.xml", f"{base}/sitemap_index.xml"]
+
+    for sm_url in sitemap_urls:
+        try:
+            r = requests.get(sm_url, headers=headers, timeout=5)
+            if r.status_code != 200:
+                continue
+            if "<urlset" not in r.text and "<sitemapindex" not in r.text:
+                continue
+
+            locs = _re_t.findall(r"<loc>([^<]+)</loc>", r.text)
+            for loc in locs[:500]:
+                loc_lower = loc.lower()
+                if sum(1 for kw in title_keywords if kw in loc_lower) >= 2:
+                    if verify_url_exists(loc, timeout=3):
+                        logger.info(f"  🎯 Found URL via sitemap: {loc[:80]}")
+                        return loc
+        except Exception:
+            continue
+
+    # Fallback: scrape homepage for matching links
+    try:
+        r = requests.get(base, headers=headers, timeout=5)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, "lxml")
+            for a in soup.find_all("a", href=True):
+                text = a.get_text().strip().lower()
+                if len(text) < 15:
+                    continue
+                # Count matching keywords
+                matches = sum(1 for kw in title_keywords if kw in text)
+                if matches >= 3:
+                    href = a["href"]
+                    if not href.startswith("http"):
+                        href = f"{base}/{href.lstrip('/')}"
+                    if verify_url_exists(href, timeout=3):
+                        logger.info(f"  🎯 Found URL via homepage: {href[:80]}")
+                        return href
     except Exception:
         pass
 
-    # GET fallback (slower, only if HEAD fails)
-    try:
-        r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True, stream=True)
-        ok = 200 <= r.status_code < 400
-        _url_verify_cache[url] = ok
-        return ok
-    except Exception:
-        _url_verify_cache[url] = False
-        return False
+    return None
 
+
+def resolve_or_skip(base_url: str, constructed_url: str, post_id: str,
+                    title: str, uni_name: str, uni_code: str = None):
+    """
+    CONTENT_VERIFY_V1 — smarter resolver.
+    
+    For SPAs: only trust the constructed URL (assumes config is correct).
+    For regular sites: verify content matches the title.
+    
+    Returns a verified URL or None to skip.
+    """
+    if not constructed_url:
+        return None
+
+    result = verify_url_content(constructed_url, title, timeout=5)
+
+    if result == "valid":
+        return constructed_url
+
+    if result == "spa":
+        # SPA shell — can't verify server-side.
+        # Trust it ONLY if we have a valid post_id (means we came from the CMS API)
+        if post_id and len(post_id) >= 12:
+            logger.info(f"  ℹ️  SPA URL accepted (config-driven): {constructed_url[:70]}")
+            return constructed_url
+        else:
+            logger.warning(f"  ⏭️  SPA URL skipped (no post ID): {constructed_url[:70]}")
+            return None
+
+    if result == "invalid":
+        # Content mismatch OR 404 — try sitemap search as last resort
+        if title and base_url:
+            resolved = search_url_by_title(base_url, title, uni_name)
+            if resolved:
+                return resolved
+        logger.info(f"  ⏭️  URL invalid, skipping: {constructed_url[:70]}")
+        return None
+
+    # "error" — network issue, skip
+    logger.warning(f"  ⚠️  URL unreachable, skipping: {constructed_url[:70]}")
+    return None
 
 def submit_scraped_item_to_backend(university_id, title, source_url, summary=None, attachment_url=None, image_url=None, date_published=None):
     # JUNK_FILTER — reject nav links, emails, phones
@@ -1503,10 +1670,29 @@ def submit_scraped_item_to_backend(university_id, title, source_url, summary=Non
         logger.debug(f"⏭️  Skipping junk title: {title[:60]}")
         return
 
-    # VERIFY_URL_V1 — reject broken URLs before ingesting
-    if source_url and not verify_url_exists(source_url):
-        logger.info(f"⏭️  Skipping (URL invalid): {source_url[:80]}")
-        return
+    # UNIVERSAL_URL_RESOLVER — try to find a working URL or skip
+    if source_url:
+        # Extract post ID from URL if present (for SPA fallback)
+        import re as _re_pid
+        post_id_match = _re_pid.search(r'/(?:post|news|blog|article|posts)/([a-zA-Z0-9_\-]+)/?$', source_url)
+        post_id = post_id_match.group(1) if post_id_match else None
+
+        # Get university's base URL for pattern attempts
+        from urllib.parse import urlparse as _urlparse
+        parsed = _urlparse(source_url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+
+        resolved_url = resolve_or_skip(
+            base_url=base_url,
+            constructed_url=source_url,
+            post_id=post_id,
+            title=title,
+            uni_name=uni_name,
+            uni_code=uni.short_code,  # CONTENT_VERIFY — needed for verified templates
+        )
+        if not resolved_url:
+            return  # Skip — no valid URL found
+        source_url = resolved_url  # Use the working URL
 
     category = classify_announcement_category(title)
 
@@ -3132,6 +3318,22 @@ def memory_check(force_gc: bool = False):
         "system_percent": sys_mem.percent,
         "scrape_running": _scrape_lock.locked() if '_scrape_lock' in dir() else None,
         "scrape_started_at": _current_scrape_started_at[0] if '_current_scrape_started_at' in dir() else None,
+    }
+
+
+
+
+# ══════════════════════════════════════════════════════════
+#  DEAD_URLS_ENDPOINT — inspect what's been skipped
+# ══════════════════════════════════════════════════════════
+
+@app.get("/api/v1/admin/dead-urls", tags=["Admin"])
+def list_dead_urls(limit: int = 100):
+    """See which URLs the scraper has rejected."""
+    return {
+        "total_cached": len(_url_verify_cache),
+        "total_dead": len(_dead_url_cache),
+        "sample_dead_urls": list(_dead_url_cache)[:limit],
     }
 
 
