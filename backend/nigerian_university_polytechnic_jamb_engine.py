@@ -1558,7 +1558,7 @@ def resolve_url_by_pattern(base_url: str, post_id: str, uni_code: str = None, ti
     return url
 
 
-def search_url_by_title(base_url: str, title: str, uni_name: str) -> str:
+def search_url_by_title(base_url: str, title: str, uni_name: str = "") -> str:
     """
     Fallback: search the site's homepage/sitemap for a link matching the title.
     Returns the actual URL, or None.
